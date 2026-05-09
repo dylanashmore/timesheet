@@ -624,7 +624,7 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
           <option value="">All Workers</option>
         </select>
       </div>
-      <div class="form-card" id="-form-card" style="margin-bottom:24px;">
+      <div class="form-card" id="hourly-form-card" style="margin-bottom:24px;">
         <div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:14px;">Add Hourly Entry</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
           <div>
@@ -998,6 +998,7 @@ function renderView() {
 
   let filteredRecords = records;
   let filteredHourly  = hourlyEntries;
+
   if (periodFilter) {
     filteredRecords = filteredRecords.filter(r => recordInPeriod(r, periodFilter));
     filteredHourly  = filteredHourly.filter(e => recordInPeriod(e, periodFilter));
@@ -1007,25 +1008,31 @@ function renderView() {
   if (wFilter) displayWorkers = workers.filter(w => w._id === wFilter);
 
   const cards = displayWorkers.map(w => {
-    // Daily entries for this worker
     const dailyDays = filteredRecords
       .filter(r => r.workerIds.includes(w._id))
-      .map(r => ({ date: r.date, type: 'daily', location: r.location, note: r.note, amount: w.wage, _id: r._id }));
+      .map(r => ({
+        date: r.date,
+        type: 'daily',
+        location: r.location,
+        note: r.note,
+        amount: Number(w.wage || 0),
+        _id: r._id
+      }));
 
-    // Hourly entries for this worker
     const hourlyDays = filteredHourly
       .filter(e => e.workerId === w._id)
       .map(e => ({
-          date: e.date,
-          type: 'hourly',
-          location: e.location || '',
-          hours: e.hours,
-          rate: e.rate,
-          amount: e.hours * e.rate,
-          _id: e._id
-        }));
-    // Merge and sort by date
+        date: e.date,
+        type: 'hourly',
+        location: e.location || '',
+        hours: Number(e.hours || 0),
+        rate: Number(e.rate || 0),
+        amount: Number(e.hours || 0) * Number(e.rate || 0),
+        _id: e._id
+      }));
+
     const allDays = [...dailyDays, ...hourlyDays].sort((a, b) => a.date.localeCompare(b.date));
+
     return { worker: w, days: allDays };
   }).filter(x => x.days.length > 0);
 
@@ -1035,20 +1042,27 @@ function renderView() {
   }
 
   list.innerHTML = cards.map(({ worker: w, days }) => {
-    const totalEarned = days.reduce((sum, d) => sum + d.amount, 0);
+    const totalEarned = days.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+
     const daysHtml = days.map(d => {
       if (d.type === 'daily') {
-        return `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${d.amount.toLocaleString()}</strong></span></div>`;
-      } else {
-        return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? d.location + ' · ' : ''}${d.hours}h × $${d.rate}/hr = <strong>$${d.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
-      <div class="wc-header">
-        <div class="wc-name">${w.name}</div>
-        <div class="wc-days-count">${days.length} entr${days.length !== 1 ? 'ies' : 'y'}</div>
-        <div class="wc-wage">Total $${totalEarned.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-        <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${periodFilter}')">⬇ Download XLSX</button>
+        return `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span></div>`;
+      }
+
+      return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? d.location + ' · ' : ''}${d.hours}h × $${d.rate}/hr = <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
+    }).join('');
+
+    return `
+      <div class="worker-card">
+        <div class="wc-header">
+          <div class="wc-name">${w.name}</div>
+          <div class="wc-days-count">${days.length} entr${days.length !== 1 ? 'ies' : 'y'}</div>
+          <div class="wc-wage">Total $${totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${periodFilter}')">⬇ Download XLSX</button>
+        </div>
+        <div class="wc-days">${daysHtml}</div>
       </div>
-      <div class="wc-days">${daysHtml}</div>
-    </div>`;
+    `;
   }).join('');
 }
 
