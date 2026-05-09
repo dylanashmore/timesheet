@@ -127,7 +127,6 @@ module.exports = async (req, res) => {
       entriesByDate[entry.date].push({
         type: 'hourly',
         location: entry.location || 'Hourly Entry',
-        note: `${hours}h × $${rate}/hr`,
         amount: hours * rate
       });
     });
