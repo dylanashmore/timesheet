@@ -11,13 +11,20 @@ module.exports = async (req, res) => {
     return res.json(entries);
   }
 
-  if (req.method === 'POST') {
-    const { workerId, date, hours, rate } = req.body;
-    if (!workerId || !date || hours == null || rate == null)
-      return res.status(400).json({ error: 'workerId, date, hours, and rate required' });
-    const entry = await Hourly.create({ workerId, date, hours, rate });
-    return res.status(201).json(entry);
-  }
+ if (req.method === 'POST') {
+    const { workerId, date, location, hours, rate } = req.body;
+
+    if (!workerId || !date || !hours || !rate) {
+      return res.status(400).json({ error: 'workerId, date, hours, and rate are required' });
+    }
+
+    const entry = await Hourly.create({
+      workerId,
+      date,
+      location: location || '',
+      hours,
+      rate
+    });
 
   res.status(405).json({ error: 'Method not allowed' });
 };
