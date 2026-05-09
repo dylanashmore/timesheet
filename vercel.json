@@ -20,8 +20,8 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/templates/(.*)",
-      "dest": "/public/templates/$1"
+      "src": "/public/(.*)",
+      "dest": "/public/$1"
     },
     {
       "src": "/(.*)",
