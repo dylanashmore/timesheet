@@ -49,7 +49,9 @@ module.exports = async (req, res) => {
     const templateBuffer = await templateRes.arrayBuffer();
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(Buffer.from(templateBuffer));
+    await workbook.xlsx.load(Buffer.from(templateBuffer), {
+      ignoreNodes: ['autoFilter', 'tableParts', 'extLst']
+    });
 
     const ws = workbook.getWorksheet('Weekly Time Record') || workbook.worksheets[0];
 
