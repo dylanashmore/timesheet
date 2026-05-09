@@ -118,18 +118,19 @@ module.exports = async (req, res) => {
     });
 
     // Hourly entries: amount = hours × hourly rate
-    hourlyRecords.forEach(entry => {
-      if (!entriesByDate[entry.date]) entriesByDate[entry.date] = [];
+hourlyRecords.forEach(entry => {
+  if (!entriesByDate[entry.date]) entriesByDate[entry.date] = [];
 
-      const hours = Number(entry.hours || 0);
-      const rate = Number(entry.rate || 0);
+  const hours = Number(entry.hours || 0);
+  const rate = Number(entry.rate || 0);
 
-      entriesByDate[entry.date].push({
-        type: 'hourly',
-        location: entry.location || 'Hourly Entry',
-        amount: hours * rate
-      });
-    });
+  entriesByDate[entry.date].push({
+    type: 'hourly',
+    location: entry.location || 'Hourly Entry',
+    note: '',
+    amount: hours * rate
+  });
+});
 
     let weeklyTotal = 0;
 
