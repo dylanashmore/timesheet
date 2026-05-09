@@ -9,6 +9,26 @@ function formatDateText(date) {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 }
 
+function formatTime12(time) {
+  if (!time) return '';
+
+  const [hourStr, minute] = time.split(':');
+  let hour = Number(hourStr);
+
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+
+  return `${hour}:${minute} ${ampm}`;
+}
+
+function safeFileName(name) {
+  return String(name || 'worker')
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 function getCurrentPayPeriod() {
   const today = new Date();
   today.setHours(12, 0, 0, 0);
@@ -27,6 +47,8 @@ function getCurrentPayPeriod() {
     periodEnd: toYMD(end)
   };
 }
+
+
 
 module.exports = async (req, res) => {
   try {
@@ -128,11 +150,16 @@ hourlyRecords.forEach(entry => {
     type: 'hourly',
     location: entry.location || 'Hourly Entry',
     note: '',
-    amount: hours * rate
+    amount: hours * rate,
+    hours,
+    rate,
+    timeIn: entry.timeIn || '',
+    timeOut: entry.timeOut || ''
   });
 });
 
     let weeklyTotal = 0;
+    let weeklyHours = 0;
 
     // Fill rows 11–17
     for (let i = 0; i < 7; i++) {
@@ -149,8 +176,9 @@ hourlyRecords.forEach(entry => {
       ws.getCell(`D${row}`).value = null; // Date
       ws.getCell(`E${row}`).value = null; // Location
       ws.getCell(`F${row}`).value = null; // Amount
+      ws.getCell(`G${row}`).value = null; // Clock In
+      ws.getCell(`H${row}`).value = null; // Clock Out
       ws.getCell(`I${row}`).value = null; // Total
-
       // Always fill day/date for the pay period
       ws.getCell(`B${row}`).value = dayNames[date.getDay()];
       ws.getCell(`D${row}`).value = formatDateText(date);
@@ -171,7 +199,24 @@ hourlyRecords.forEach(entry => {
         return sum + Number(entry.amount || 0);
       }, 0);
 
+      const hourlyEntriesForDay = entries.filter(entry => entry.type === 'hourly');
+
+      const totalHoursForDay = hourlyEntriesForDay.reduce((sum, entry) => {
+        return sum + Number(entry.hours || 0);
+      }, 0);
+      
+      const clockInText = hourlyEntriesForDay
+        .map(entry => formatTime12(entry.timeIn))
+        .filter(Boolean)
+        .join(' | ');
+      
+      const clockOutText = hourlyEntriesForDay
+        .map(entry => formatTime12(entry.timeOut))
+        .filter(Boolean)
+        .join(' | ');
+
       weeklyTotal += dayTotal;
+      weeklyHours += totalHoursForDay;
 
       ws.getCell(`E${row}`).value = locationText;
 
@@ -180,13 +225,21 @@ hourlyRecords.forEach(entry => {
 
       ws.getCell(`I${row}`).value = dayTotal;
       ws.getCell(`I${row}`).numFmt = '"$"#,##0.00';
+
+      if (hourlyEntriesForDay.length > 0) {
+        ws.getCell(`G${row}`).value = clockInText;
+        ws.getCell(`H${row}`).value = clockOutText;
+      }
     }
 
     // Weekly total
     ws.getCell('I20').value = weeklyTotal;
     ws.getCell('I20').numFmt = '"$"#,##0.00';
 
-    const lastName = worker.name.split(' ').pop();
+    ws.getCell('H18').value = weeklyHours;
+    ws.getCell('H18').numFmt = '0.00';
+
+    const employeeName = safeFileName(worker.name);
     const safePeriod = `${periodStart}_to_${periodEnd}`;
 
     res.setHeader(
@@ -196,7 +249,7 @@ hourlyRecords.forEach(entry => {
 
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${lastName}_Timesheet_${safePeriod}.xlsx"`
+      `attachment; filename="${employeeName}_Timesheet_${safePeriod}.xlsx"`
     );
 
     await workbook.xlsx.write(res);
