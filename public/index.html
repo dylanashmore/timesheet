@@ -1107,6 +1107,7 @@ function renderView() {
       }
 
       return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? d.location + ' · ' : ''}${d.timeIn || ''}${d.timeOut ? '–' + d.timeOut : ''} · ${d.hours} hrs · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
+    }).join('');
 
     return `
       <div class="worker-card">
