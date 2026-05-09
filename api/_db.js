@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-// Reuse connection across warm serverless invocations
 let cached = global._mongoConn;
 if (!cached) cached = global._mongoConn = { conn: null, promise: null };
 
@@ -13,7 +12,6 @@ async function connectDB() {
   return cached.conn;
 }
 
-// ── Schemas ──────────────────────────────────────────────────
 const workerSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   wage: { type: Number, required: true, min: 0 },
@@ -26,7 +24,15 @@ const recordSchema = new mongoose.Schema({
   workerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
 }, { timestamps: true });
 
+const hourlySchema = new mongoose.Schema({
+  workerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', required: true },
+  date:     { type: String, required: true },
+  hours:    { type: Number, required: true, min: 0 },
+  rate:     { type: Number, required: true, min: 0 },
+}, { timestamps: true });
+
 const Worker = mongoose.models.Worker || mongoose.model('Worker', workerSchema);
 const Record = mongoose.models.Record || mongoose.model('Record', recordSchema);
+const Hourly = mongoose.models.Hourly || mongoose.model('Hourly', hourlySchema);
 
-module.exports = { connectDB, Worker, Record };
+module.exports = { connectDB, Worker, Record, Hourly };

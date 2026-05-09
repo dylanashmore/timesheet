@@ -617,12 +617,36 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
     <div class="page" id="page-view">
       <div class="pg-title">Payroll Records</div>
       <div class="filter-row">
-        <select id="filter-month" onchange="renderView()">
-          <option value="">All Months</option>
+        <select id="filter-period" onchange="renderView()">
+          <option value="">All Pay Periods</option>
         </select>
         <select id="filter-worker" onchange="renderView()">
           <option value="">All Workers</option>
         </select>
+      </div>
+      <div class="form-card" id="hourly-form-card" style="margin-bottom:24px;">
+        <div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:14px;">Add Hourly Entry</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Worker</label>
+            <select id="hourly-worker" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+              <option value="">Select worker...</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Date</label>
+            <input type="date" id="hourly-date" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Hours</label>
+            <input type="number" id="hourly-hours" placeholder="e.g. 6" min="0" step="0.5" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Hourly Rate ($)</label>
+            <input type="number" id="hourly-rate" placeholder="e.g. 18" min="0" step="0.01" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <button class="btn-sm" onclick="submitHourlyEntry()" style="padding:11px 18px;background:var(--green-dark);color:#fff;border-color:var(--green-dark);white-space:nowrap;">+ Add</button>
+        </div>
       </div>
       <div id="view-list"></div>
     </div>
@@ -737,13 +761,14 @@ async function initApp() {
   setTodayDisplay();
 
   try {
-    [workers, records] = await Promise.all([
+    [workers, records, hourlyEntries] = await Promise.all([
       GET('/api/workers'),
       GET('/api/records'),
+      GET('/api/hourly'),
     ]);
   } catch (e) {
     toast('Could not connect to server: ' + e.message);
-    workers = []; records = [];
+    workers = []; records = []; hourlyEntries = [];
   }
 
   buildEmpGrid();
@@ -774,10 +799,35 @@ function formatDate(ds) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[+m-1]} ${+d}, ${y}`;
 }
-function monthLabel(ds) {
-  const [y,m] = ds.split('-');
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return `${months[+m-1]} ${y}`;
+
+// ═══════════════════════════════════════
+// PAY PERIOD HELPERS  (Wed–Tue)
+// ═══════════════════════════════════════
+function parseLocalDate(ds) { return new Date(ds + 'T12:00:00'); }
+function toYMD(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+function getPayPeriod(ds) {
+  const d = parseLocalDate(ds);
+  const day = d.getDay(); // Sun=0 Mon=1 Tue=2 Wed=3
+  const daysSinceWednesday = (day - 3 + 7) % 7;
+  const start = addDays(d, -daysSinceWednesday);
+  const end   = addDays(start, 6);
+  return { start: toYMD(start), end: toYMD(end), key: `${toYMD(start)}|${toYMD(end)}` };
+}
+function payPeriodLabel(key) {
+  const [start, end] = key.split('|');
+  return `${formatDate(start)} – ${formatDate(end)}`;
+}
+function recordInPeriod(record, periodKey) {
+  if (!periodKey) return true;
+  const [start, end] = periodKey.split('|');
+  return record.date >= start && record.date <= end;
 }
 
 // ═══════════════════════════════════════
@@ -823,16 +873,13 @@ async function submitAttendance() {
   if (!loc)            return toast('Please enter a job site / location.');
   if (selected.size === 0) return toast('Please select at least one employee.');
 
-  const today   = todayStr();
-  const exists  = records.find(r => r.date === today);
-  if (exists && !confirm('Attendance for today has already been submitted. Overwrite it?')) return;
+  const today  = todayStr();
+  const exists = records.find(r => r.date === today && r.location === loc);
+  if (exists && !confirm('Attendance for today at this location has already been submitted. Overwrite it?')) return;
 
   try {
-    const saved = await POST('/api/records', {
-      date: today, location: loc, note, workerIds: [...selected]
-    });
-    // update local cache
-    records = records.filter(r => r.date !== today);
+    const saved = await POST('/api/records', { date: today, location: loc, note, workerIds: [...selected] });
+    records = records.filter(r => !(r.date === today && r.location === loc));
     records.push(saved);
     toast('✓ Attendance submitted for ' + selected.size + ' employee' + (selected.size > 1 ? 's' : '') + '!', true);
     document.getElementById('att-location').value = '';
@@ -842,66 +889,145 @@ async function submitAttendance() {
 }
 
 // ═══════════════════════════════════════
-// VIEW PAGE
+// HOURLY ENTRIES
 // ═══════════════════════════════════════
-function populateFilters() {
-  const months = [...new Set(records.map(r => r.date.slice(0,7)))].sort().reverse();
-  const mSel = document.getElementById('filter-month');
-  const mVal = mSel.value;
-  mSel.innerHTML = '<option value="">All Months</option>';
-  months.forEach(m => {
-    const o = document.createElement('option');
-    o.value = m; o.textContent = monthLabel(m + '-01');
-    mSel.appendChild(o);
-  });
-  if (mVal) mSel.value = mVal;
+let hourlyEntries = [];
 
-  const wSel = document.getElementById('filter-worker');
-  const wVal = wSel.value;
-  wSel.innerHTML = '<option value="">All Workers</option>';
+function buildHourlyWorkerSelect() {
+  const sel = document.getElementById('hourly-worker');
+  if (!sel) return;
+  const val = sel.value;
+  sel.innerHTML = '<option value="">Select worker...</option>';
   workers.forEach(w => {
     const o = document.createElement('option');
     o.value = w._id; o.textContent = w.name;
-    wSel.appendChild(o);
+    sel.appendChild(o);
   });
-  if (wVal) wSel.value = wVal;
+  if (val) sel.value = val;
+}
+
+async function submitHourlyEntry() {
+  const workerId = document.getElementById('hourly-worker').value;
+  const date     = document.getElementById('hourly-date').value;
+  const hours    = parseFloat(document.getElementById('hourly-hours').value);
+  const rate     = parseFloat(document.getElementById('hourly-rate').value);
+  if (!workerId) return toast('Select a worker.');
+  if (!date)     return toast('Enter a date.');
+  if (isNaN(hours) || hours <= 0) return toast('Enter valid hours.');
+  if (isNaN(rate)  || rate  <= 0) return toast('Enter a valid hourly rate.');
+  try {
+    const entry = await POST('/api/hourly', { workerId, date, hours, rate });
+    hourlyEntries.push(entry);
+    document.getElementById('hourly-hours').value = '';
+    document.getElementById('hourly-rate').value  = '';
+    document.getElementById('hourly-date').value  = '';
+    document.getElementById('hourly-worker').value = '';
+    populateFilters();
+    renderView();
+    toast('✓ Hourly entry added.', true);
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function deleteHourlyEntry(id) {
+  if (!confirm('Remove this hourly entry?')) return;
+  try {
+    await DELETE('/api/hourly/' + id);
+    hourlyEntries = hourlyEntries.filter(e => e._id !== id);
+    renderView();
+    toast('Entry removed.');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+// VIEW PAGE
+// ═══════════════════════════════════════
+function populateFilters() {
+  // Combine dates from both records and hourly entries for pay period list
+  const allDates = [
+    ...records.map(r => r.date),
+    ...hourlyEntries.map(e => e.date)
+  ];
+  const periods = [...new Set(allDates.map(d => getPayPeriod(d).key))].sort().reverse();
+
+  const pSel = document.getElementById('filter-period');
+  const pVal = pSel ? pSel.value : '';
+  if (pSel) {
+    pSel.innerHTML = '<option value="">All Pay Periods</option>';
+    periods.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p; o.textContent = payPeriodLabel(p);
+      pSel.appendChild(o);
+    });
+    if (pVal) pSel.value = pVal;
+  }
+
+  const wSel = document.getElementById('filter-worker');
+  const wVal = wSel ? wSel.value : '';
+  if (wSel) {
+    wSel.innerHTML = '<option value="">All Workers</option>';
+    workers.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w._id; o.textContent = w.name;
+      wSel.appendChild(o);
+    });
+    if (wVal) wSel.value = wVal;
+  }
+
+  buildHourlyWorkerSelect();
 }
 
 function renderView() {
-  const mFilter = document.getElementById('filter-month').value;
-  const wFilter = document.getElementById('filter-worker').value;
-  const list    = document.getElementById('view-list');
+  const periodFilter = document.getElementById('filter-period') ? document.getElementById('filter-period').value : '';
+  const wFilter      = document.getElementById('filter-worker')  ? document.getElementById('filter-worker').value  : '';
+  const list         = document.getElementById('view-list');
 
-  let recs = records;
-  if (mFilter) recs = recs.filter(r => r.date.startsWith(mFilter));
+  let filteredRecords = records;
+  let filteredHourly  = hourlyEntries;
+  if (periodFilter) {
+    filteredRecords = filteredRecords.filter(r => recordInPeriod(r, periodFilter));
+    filteredHourly  = filteredHourly.filter(e => recordInPeriod(e, periodFilter));
+  }
 
   let displayWorkers = workers;
   if (wFilter) displayWorkers = workers.filter(w => w._id === wFilter);
 
   const cards = displayWorkers.map(w => {
-    const myDays = recs
+    // Daily entries for this worker
+    const dailyDays = filteredRecords
       .filter(r => r.workerIds.includes(w._id))
-      .sort((a,b) => a.date.localeCompare(b.date));
-    return { worker: w, days: myDays };
+      .map(r => ({ date: r.date, type: 'daily', location: r.location, note: r.note, amount: w.wage, _id: r._id }));
+
+    // Hourly entries for this worker
+    const hourlyDays = filteredHourly
+      .filter(e => e.workerId === w._id)
+      .map(e => ({ date: e.date, type: 'hourly', hours: e.hours, rate: e.rate, amount: e.hours * e.rate, _id: e._id }));
+
+    // Merge and sort by date
+    const allDays = [...dailyDays, ...hourlyDays].sort((a, b) => a.date.localeCompare(b.date));
+    return { worker: w, days: allDays };
   }).filter(x => x.days.length > 0);
 
   if (cards.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="big">No records yet</div><p>Submit attendance to see it here.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="big">No records yet</div><p>Submit attendance or add hourly entries to see them here.</p></div>`;
     return;
   }
 
   list.innerHTML = cards.map(({ worker: w, days }) => {
-    const daysHtml = days.map(d =>
-      `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''}</span></div>`
-    ).join('');
-    const totalEarned = days.length * w.wage;
+    const totalEarned = days.reduce((sum, d) => sum + d.amount, 0);
+    const daysHtml = days.map(d => {
+      if (d.type === 'daily') {
+        return `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${d.amount.toLocaleString()}</strong></span></div>`;
+      } else {
+        return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.hours}h × $${d.rate}/hr = <strong>$${d.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
+      }
+    }).join('');
     return `
     <div class="worker-card">
       <div class="wc-header">
         <div class="wc-name">${w.name}</div>
-        <div class="wc-days-count">${days.length} day${days.length!==1?'s':''} worked</div>
-        <div class="wc-wage">$${w.wage}/day · Total $${totalEarned.toLocaleString()}</div>
-        <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${mFilter}')">⬇ Download XLSX</button>
+        <div class="wc-days-count">${days.length} entr${days.length !== 1 ? 'ies' : 'y'}</div>
+        <div class="wc-wage">Total $${totalEarned.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${periodFilter}')">⬇ Download XLSX</button>
       </div>
       <div class="wc-days">${daysHtml}</div>
     </div>`;
@@ -909,72 +1035,108 @@ function renderView() {
 }
 
 // ═══════════════════════════════════════
-// XLSX EXPORT
+// XLSX EXPORT — fills actual template
 // ═══════════════════════════════════════
-function downloadXLSX(workerId, monthFilter) {
+async function downloadXLSX(workerId, periodKey) {
   const w = workers.find(x => x._id === workerId);
   if (!w) return;
 
-  let recs = records.filter(r => r.workerIds.includes(workerId));
-  if (monthFilter) recs = recs.filter(r => r.date.startsWith(monthFilter));
-  recs = recs.sort((a,b) => a.date.localeCompare(b.date));
+  let dailyRecs  = records.filter(r => r.workerIds.includes(workerId));
+  let hourlyRecs = hourlyEntries.filter(e => e.workerId === workerId);
 
-  // Load the actual template from embedded base64
-  const TEMPLATE_B64 = 'UEsDBBQABgAIAAAAIQDJwpAgwAEAANUGAAATAAgCW0NvbnRlbnRfVHlwZXNdLnhtbCCiBAIooAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACsVd1q2zAUvh/sHYxuR6x0F2OMOL3oWhjsp9DuAU6k41hEloTOaZe8/Y6VtoyRxgn1jYUtne/nyPq0uNz2vnrETC6GRl3Uc1VhMNG6sG7U7/ub2WdVEUOw4GPARu2Q1OXy/bvF/S4hVVIdqFEdc/qiNZkOe6A6Jgwy08bcA8trXusEZgNr1B/n80/axMAYeMYDhlouvmILD56r66183itZuaCqq/26gapRkJJ3BliE6sdg/yOZxbZ1Bm00D71A15QygqUOkXtfp+yEMd8hsxgjpQ9yZvR0HumTq1oqizDqXKIPYv0VhmHmdVdPdb9kO7KzWN1C5p/Qi3e99fpPzJtVjJv6OMi5rSktqntw4Vn3Ef6ymHQZLiYWMvgrwCM6WP4x1OX5dgkFZoSQeOeRpm57AR1j7iCjvWP5e9eTC/gXe6zlsJIOaB6Gqbe9gI7wJ8mnGEjvxxN2oqcZbg3KwS+VI/AGvLnq5ARMvMcvuMf4JbF+IIMFBv0dVui/hTaeZnEfebXxQOQk/UoE+QHjJYMOnWVhvM0xkcRwxvMtP2feUD1LAoSZHZ7GKBn+5h7jcElYtAe4dbmUln8BAAD//wMAUEsDBBQABgAIAAAAIQAxHYnNIgEAAN4CAAALAAgCX3JlbHMvLnJlbHMgogQCKKAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAArJLRSgMxEEXfBf8h5L0721VEpNu+iFBQEKkfME1mt6FJJiRR2783rRZdqEXQx2Tu3Jy5k8ls46x4pZgM+1aOq1oK8oq18X0rnxd3o2spUkav0bKnVm4pydn0/GzyRBZzaUorE5IoLj61cpVzuAFIakUOU8WBfKl0HB3mcow9BFRr7Amaur6C+N1DTgeeYq5bGef6QorFNpSX/+INjjJqzAiKI41CLGQxmzKLWGDsKbdSs3os12mvqAq1hONAzQ9AzqjIibtcKXbAXWfUbsymhroZTgrKYkqmCPYJWlySHZI8HHDvd7W57/gU0fj3EX1g3bJ6ceTzkS18gh8UX/lsLLxxXC+Z16dYLv+ThTaZvCZ9emEYwoEIBr9y+g4AAP//AwBQSwMEFAAGAAgAAAAhABmGMlKHAwAABQkAAA8AAAB4bC93b3JrYm9vay54bWykVm1v4jgQ/n7S/Yesr9J+ubw4ryQqrICQbaV2VVGu1amqkJsYsJrEyDElqNr/fuNA2u6y3NFeRGzG4zx+PM94ktMvdZFrT1RUjJddhA0LabRMecbKeRf9NUn0DtIqScqM5LykXbShFfrS+/230zUXjw+cP2oAUFZdtJByGZlmlS5oQSqDL2kJnhkXBZFgirlZLQUlWbWgVBa5aVuWbxaElWiLEIljMPhsxlIa83RV0FJuQQTNiQT61YItqxatSI+BK4h4XC31lBdLgHhgOZObBhRpRRqdz0suyEMO266xp9UCfj7c2ILGblcC195SBUsFr/hMGgBtbknv7R9bJsY/hKDej8FxSK4p6BNTGr6wEv4HWfkvWP4rGLb+NxqG1GpyJYLgfRDNe+Fmo97pjOX0Zpu6Glkuv5FCKZUjLSeVHGVM0qyLAjD5mr4OeEgTq+VgxXLw2p2OHSCz95LOV0IDWEnFlWBPJN3AmVDuWkRthK+k0OD/eXwBq1yTJ1jTCZGW7XLyHFCxMy1TEeHp88D2+7gfJrrVtzq6GzqJHroBmG7oDYdD37cD9zvERfhRyslKLnb7Udhd5AL5PdclqVsPtqIVy155PAdhfxSEYV93EyvWXcd19c5o5OlxP+wHw6Dvxv7ou9qPOrk3jK6r150rU6tvWZnxNQTGcUGvTWs6lg/munHeskwuYAYOHIjlduyMsvkCGIcdD8YkeRirI6l4Qv0AvRXPLnq2dpcOfawaS0/gaprW1/Az3xBsKgYQbXqtbFS+pfQx32gTVlBtTFMuMihTqrI04QeFI7WeOM8a9cwWIqMzVtJMZQoAvrF2sNM6LwsDpC/ldMJkDsUOsicl+XWLbaHe5/3FP386AS3gPjXfgP5qhTFfN8BjOofTig1j6B1CHJz474SzDeOrewju67vhHMM4wwfpxSe4805+LvDD/iGCABi+E9BTDIPDgPZ/C9KogVFPpVKj8t3dH2fwnoK6cv/nXdz/+/7+J1JvJYYsguxIoWqorkm+EFt2qM4YreVFJZteWwkG6T/wOgPLCW04njjRXRxa+mDgu7oXJ44X4Hg48hJVDdQbNaoV4uyDhbJjNk9TIlcCkhgKWGNHqk12oy+Ds+3A7gz88MaJxnFT/rZP/9vEa/hiyOmRk5ObIycOv11OLo+cezGaTG8TNdn85W5NEAR8rSxm+wXT+wcAAP//AwBQSwMEFAAGAAgAAAAhAEXiwUknAQAAvAMAABoACAF4bC9fcmVscy93b3JrYm9vay54bWwucmVscyCiBAEooAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKyTy07DMBBF90j8g+U9maRAQahJFyCkbiF8gOVMHmr8kMc88vdYCTSJVMImG0szI997PLre7b9Uyz7QUWN0ypMo5gy1NEWjq5S/5c9X95yRF7oQrdGY8g6J77PLi90LtsKHS1Q3llhQ0ZTy2nv7AECyRiUoMhZ1mJTGKeFD6SqwQh5FhbCJ4y24qQbPZprsUKTcHYprzvLOBuf/tU1ZNhKfjHxXqP0ZCyDfteEBLBeuQp/yoY4CI4fz9ps17X1YC47ufQn9mSwxJGsyfBp3pBrRjxynFkE/WYTZrgkjRSsfa9HoEebUWtrI7R8QqpHOkCl9JI2CIQ8hB8kdJPE8bWBD5s3Ed6jpp79kfrNqImvhsHj1Lny4aTCn7V8YmP257BsAAP//AwBQSwMEFAAGAAgAAAAhAPEOUU6zDQAAR0EAABgAAAB4bC93b3Jrc2hlZXRzL3NoZWV0MS54bWycVFtr2zAUfh/sPxi9J7acS+MQp4yWboVulLXdYG+KfByLSpYnKbeN/fcdyXFSyOhCQyLZR/q+851bZpdbJaM1GCt0nRPaT0gENdeFqJc5eXq86U1IZB2rCyZ1DTnZgSWX8/fvZhttnm0F4CJkqG1OKueaaRxbXoFitq8bqPGk1EYxh69mGdvGACsCSMk4TZJxrJioScswNedw6LIUHK41XymoXUtiQDKH+m0lGtuxKX4OnWLmedX0uFYNUiyEFG4XSEmk+PR2WWvDFhLj3tIh49HW4DfF36BzE+wnnpTgRltduj4yx63m0/CzOIsZPzCdxn8WDR3GBtbCF/BIlb5NEh0duNIj2eCNZOMDmU+Xma5EkZPfyf7Tw536JTku3dkfMp+FPrk385ljiysttYkcdhaWYkgiJ2qXk6R/kWXZhI4nk0k2HNDhMCXxfNawJTyAe2ruTVQK96jv0YC97c/iA2shsIF80iIDZU4+0OnndOyvhBvfBGzsi+fIVnrz0YjiTtSAzY5j4i0/AMsc3lDkA0jgDjBGigp1cweluwIpPTne/6W1euBMwhc/EmilCVr9GC20fvYObxGa+MgDkZfGuBNraEluKNLan0Gtfz5E46FdZC9134TRwyQUULKVdJjE76JwVU4y0tm+6s0nEMsKszlANXxlnVadBf2F9p4Wu2uwHOfN53zgPXMtMT24Rkr4/w0cF7YN+6Z1MeqPOrq906D4gMD2Cgjc9whK+4OL10HYRgGE+x6UejfW7fyIorXV/0+H2DUBi7F32OQ/Gn3V2rB8oV6NKw4J+QsAAP//AAAA//+0mm1PHDcQx7/KaZsXJKKF3bs9HsQhwe2TV6VI5CJVQnlxIpeCVELFkaT99h2vx+sZ/3una7TwCv0Yjz1PtsfL2fp+tXopli/L87Pnp++j51mSJqP1X8sva/rtNB0no/uXWTI+TEZ3X9cvT4/N6uEPS0jq73SyvDv99E+xWt+tvhA7/GWcnJ/dWSUXVsssmSYHDC4dSI97Mmdy0pMCZEogFZAaSAPEAGkdmdjJD8jy3vwsMp+sIOSMr56eH5fO+M4H+f/1ilU+S7pJOzddxmDuQB58EkuUMahiUMegiYGJQSuA8gbFXyWDzYoN3pjs6I1pnyNWufKGA9NJMiInr0nu2/n47OAbReiO02jei/jEKoCUQCogNZCGSda73gBpmUDS0IoHqBmrRfnDgSPhjnQS+cOJhKoqHAhFVTqQHvZ2VUBqJmkv0zgyFd4A0or1qqShRABvpLvWSt6nh1Wj3OFAGtY0ZzIO5cIkWFsCqYDUTIT9jkyDZgOkFQtU9k8HyQarRZnvgN2K++o4irLBiaRhgykcmR71HiqBVDwqbDo1T0Wl3k+VHeq5GtYTRhkgrbBBeYhSeoB6sVqUhxxQHppGHnIi0kOOTI9lleV6VNnL+F2nYj3CZzy59FlUrA2rCaeiAdIKo5TLaH0DuMxqUS5zIA1LmjMJGVM4ImqhBFLxKOEPR8Z0svQ5FLm1YTVhszJAWrFi5Y+TQfxhtSh/xGDugDiQHcjCLlTGYyoQqYE0QEysphVAmU57+SBXNKuGbjdhr7zsNBOSxRDV/dzL0Or6wB7reim8jCyGNKopL0Nnaq8njcq18kLySpBGu17thWg/DpqiJTX/qelEr8l4Idq3wsanZVov0xWIjstAV2dxNXW3xJQJh+Xlmc7Iz+emKm9urm/2FuXvi73Fw+Pqvb3L397+tLh/WI9unr5/3L8tLhblx4/7yZJ+krf7oyR5e3bwmS5W9trbX6q8fnkVd1PmfNpEU5pq703z5nh2uJ8k+/a3n6eblJdeeSiYClGNqEFkELUewZ2M7gmDVAnc2TvFtGm8WjR4RhkNbgtUNLoUvV8+rz4lo+fV51lSdCt7oEYs6ZMDI5VvjhRPLCMFqPbmB6kGkQlIpur7D1d7ZZqd0gi5ivNoj2n96P7WcsVk3DlFV13co/xgwwrdiG1+7eHwanFm/TLODu1cdZPNsWTlMpaAam+ijCVImSCFsRxTLMfbYykcqwM3TNdEd7noDGeS8+kz/HbpZsyD1wo/5a7bpXKZ3ItLb44MHFsYUI1SDSITEAZuQoFT6YNFuKm/s73cEE9E0OB1imfJ6wXOzagCx2jXwKl9SweOzZGBA1SziRNZcSBlghQGLqfAqT0cA7epMaVr/iCBg9a0U/yagXMzqsAx2jVw6eatks2RgQNUs4kqcCBlghQFDg5o+vOpSW2HR4d0Gg5pdyxOKbDqGoWB3dRPdzoHeLSFjrpT/JqBdTOqwDLaMbCbw8rGhCeciq2ZBFQjahC5mNFVwL5vq7C6QNI+8A2DtamTpzfwQaoQevlOMT3WB/PmjHLxIuSlZLcU9UEly0wmqtGwaRr6jPb6cvTeUHux7fSvdtF0cXX94bfFVj31LnrmT39+ffySblXU7K4o26rI7KJocb24+HWrmtarwf5lmBeOFJ44mKg0cUJjmSb88KGa6uieXnrl4XmkQlQjahAZj8JTVCvXrj/SDPMCQk8f8fcYR6RvWEj6hlEunwnS+H3DKz9SNUSl9Y7cJjrxeOOo1EA4Q+jPp6YToTMkC2cIVdo7cv4WxfVGxXYX604/2MWaHxjjVke7ZWe5NGDzPK0MhQ71MI8qGTyqMBmLp0+PxNsnSpWMcnGwIKoRNYiMVx8+4LRypdoTwzxo0Mtll/Ti2Y9RHjrROaICUYmoQlQjajwKdhtErVqq9sUwTX/Gvan0BX/jU0+XWfQVgcdNwwejAlGJqEJUI2o8kp96ou3FBBn/TaJFa64YdamqHThM851xjygdyN2xTCZABQ8UKVciqhDViBqPQtkaRK1aqvbFMP1sxm2X9AV/NFTJFH/S5nEqmfpxPrglSlWIakSNR1uTiecLS2+VNdpdw3SRGTcz0l2A5l5KVhpIlairQlQjahAZRK1CzhcH4R9n/gUAAP//AAAA///EWVtz4jYU/isaHvrmgGUbiEuYwReCH7abyWa2zwoW4ImRXFluynb633skm0uCk4h2nOXBoIul7xwdncvHZEvFmoY0z0u05BWTNz173JtODt1I0NVNb+H4idPrn/e7fuK29Xt+4rX0B45/27ZONPbjcds6Qz8ZtvWP/GTU0h8N/bhtfjTy47b5i7GftO6LQTDcKhnGMILbZIOR2zdGXBhpXw0UhVs1hT14p30ElIhbTwPDMdUj/eO5TifFhjMqs+WdQCvOZJLe9AY9JHcFvekxHnL2JxVlxpkSKiWSfCd5Bt/QczAKPAKjeDmGSJ7z5yAn7AmMpofKDX9OWFHJL7QsyRrWbjpjIbg47SwE3xZgaaGgRFJE0DOlT/kOyWxLYRlKJcoYkpusRM9cPOmeK/TAJcnRhleiRISlSOp2QXaICFikknwLmJeAaofguaxyWDxFRCIKs/kKFqR6i3oHSR5zegWw/9AWPgOwfwm/ykA5fw+ajwXfWD0Gx8d+7J9zbf1/jTxkMqc11lPhETT2GlnCXT2ghvsUOqbA7Rq6IfCzU2sUdauuNgo8FLp+6JnujS/a+zIzipmkAn0hDIxOIEbAiFqVVTsBw1P2Ogccb4uc7yh9D7F2Z4aIh5+HmG5JliOSpgKueruyF9pDG0IffR507QsRq7aPYCtgJuo6KR8hsvVGHu7V7dDUsMc/D7p2kC/cwUKHS0OlX/9Ee3lD6yNTrc86x35P1xBABFroeHPwJzyvtgxVLAXr0frfUJJmbH2wnNiG0GoWSIIOhYhUYIWo8TIsVgWEcIiJH4qDHkkJ8zhDv0NoVgEUZETq5cOdWYwPMkfmMoedH9xXSGZ0InHpyc3NpYg6l+Jbtny62PZuzSWIO5fgO1nqFPJiKRbmUsw7lKJON2sjWnGBKFludKKafpRxmjuLxFjUJncbdJN1nmTWSlSVKFMmM0irCyoyDkn0exl2E0XB2bwOoxHUkmbO0L4sOf0vCeK98l4gjy4h9m6sFfS1Kegus9ra/lR5c+bGT6qbd3SPTQOR7XxeJlBma0ZkBebUXs9A/WxoMO6nVRQfYnZNMXdfVNRxvymeX+aGGKMFkBCG6u2+mngzszjPxo29SPeFRBvqlkTcGHGX9YPCCtEKfNyZ+zbOBI9Ug3ms6r6yeF3s63oigvKhISmC00oimg/C2LYdy4sd13Ln9rU1G8exFbnz4QyP4rmNZ53E1ZqYOKvza7BQYe7BnhabLnxmkCVb0dweWq7jDKxgGAUWxoEXxOMIe47TIdglMHOE7c45iStUS0P3rEVKJZAAuvpXApXokQIdqJm5d2qGI+EWnLqiwB0HIzwLLC/0BpYbOaF1HWI4MTvyIDq59sCJtNT9V/wkkJsiY/JrUbOVGy6yH0BxkjyEBIYKCmyerYi6ArihL0SsM6A0c7oC8nFwNQL2Spf9+4bkhfoJ3Y9cAp3YNFSJR0XTWHEO69aNZt1vVFYFKiEqA+c5BMtbZfKBL6hiFDTTCqAAjc6Gb3oFF1KQDLgG4SuyUSSpRljvMtfLozRbrQA9k/NMlIqTB/aVp2k9Or0DYdAvZFv8eqe4Qv3rt0n/OGHSP11tOoGgy0EXmtIrXzb3RpjYwGvbAB4OWO7UHwL3VENYaiIXRD1dZP9WZNt+pN46piShLpEbtfdf7axJ1zsi5PHfBpDs0HtUiSbY+8fp00n/QAVP/wUAAP//AwBQSwMEFAAGAAgAAAAhADxDN6aNBgAA8RsAABMAAAB4bC90aGVtZS90aGVtZTEueG1s7Flbaxw3FH4v9D+IeU+86734QtbB3ovdJk6MvUnJo3ZWO6NYMxokrZ19K8ljoVCalr4UWigUUiiB9rW/xm1Km/6IHkmzu5JXju3Y0NLGBntX8+ncz9E5mlu3n2QMHREhKc9bUfVmJUIkj/mQ5kkretDv3ViNkFQ4H2LGc9KKJkRGtzfef+8WXlcpyQiC/blcx60oVapYX1qSMSxjeZMXJIdnIy4yrOCrSJaGAh8D3YwtLVcqzaUM0zxCOc6A7P3RiMYE9TXJaGNKvMvga66kXoiZONCkSbmjPZaKZ6hRM/DhYVWD5ES2mUBHmLUiYDXkx33yREWIYangQSuqmJ9oaePWEl4vNzF1xl5nX8/8lPvKDcPDZcNTJIMZ0263s7qyOqNvAEwFcCvdZrc5o2cAOI5BWSuLS7PeW61udUqsA7IfF2m3K41K3cc79GsLMq91m52ujzcgS7++iF/uAAdPHgOy+MYCvr612W5PdXVA9mNzAd9bWWvWfbwBpYzmhwto7dBer5RmBhlxthOErwJ8dSr8HAXRMAswzWLEc+WHG7hmLCZom6uUxibmMvyYix4A9QaGFc2RmhRkhGMI6LaPRwXOuYT1ynKlV6nBX/1bN5/qWni8TrCz3S7FcmFJC4ZkLGihWtGHQDVyICfPvj15+t3JsxcnT19YCh58B+eJC3/9/Wd/ff0x+vOnb14//yKMly7+tx8/+fWXz8NASLK58q++fPn7zy9fffXpHz88D8A3BR648D7NiET3yDHa5xloZMzhS04G4nI7+imm7o7NPJE4x5pLgH4XnOqi700wwwHcFvEt+FBAkQkBt8ePPYEPUjFWNEDxTpp5wF3O2RYXQSvc0bwcM/fHeRJmLsYubh/joxDvNs49/3bHBRRYGiLZTokn5h7DucIJyYlC+hk/JCSg3SNKPbvu0lhwyUcKPaJoC9OgSfp04EXTfNMOzcAvk5CA4G/PNrsP0RZnIa075MhHQlZgFhC+T5hnxm08VjgLkezjjLkGv4tVGhLyYCJiF9eVCjydEMZRd0ikDO25L0Bfx+l3MNS1oNt32STzkULRwxDNu5hzF9nhh+0UZ0VQZpqnLvYDeQghitEeVyH4LvczRH8HP+D8THc/pMRz9/nV4AFNPJHmAaKfjEXAl9uE+/k4YSNMTKmB0u9V8ozm78q6OV7gvLhKWd8UNJhXO6eK+Vm40yW8zcWQ/vsreAeP8z0CSbN4jL0r4O8KePSfL+Bn5fP1l+15pYYiPm/ZTQOf+f27HTBN3z6ijB2oCSN3pWndJZxPwx4smtnCzJizea5I4WM5XHi4RGCzBwmuPqIqPUhxAe191XBIZEk6kajgErp+s2xGY3KKthl2KTT1Zmht6HHGVg6J1S4f2uWaO7bOyJghNjHT8ZRRTRO4KLPaytWYVa1UZ5rNV61qRDNF0VNtpjL4cFE1WJxZExofBO0SWLkJFwhadpiEMCNDbXc70k/dollfq4tkioek9JHWe9FHVeOkaaxMwyjgIz2CnuMjh9uaJnsFbhdxksuufga7qfeu4qXp3D33ks7bU+nIcjc5WY6OW9FaY7kRoRgXrWgEkzZ8zArwutS9JmYJ3FzFStiwPzeZTbjOvbkWDssqXHFYuy8o7NWBQkjVwTK1oWEelSHAcnMvYORfboBZr0sBG+lvIUVtFYLhH5MC7Oi7loxGJFaus50VcyNiAGUp5WNFxEE6PEYDNhb7GNyvQxX0GVIJdyGmIugvcMunrW0e+cW5TDr3bs3g7DpmRYrLcqtTdJrJFm7yeCaD+WalNeKBbkHZjXKXV8Wk/DWp4obx/0wVfZ7ADUVtqD0Qwz2zwEjnayviQqUcqlABd3k9AVdqpnZAtMBNMTyGoILbbvNfkCP93+acpWHSGgZNtU8TJCicRyoVhOxBWTLRdw6xanl2WZKsJGQiyhFXFlbsATkirK9rYFOf7RFKIdRNNSnLgMGdjj//e5lBg0Q3Of/Wzscm82XbA90d2BbL7r9gL1J3ir5zFKwFzz7TU83KwRsO9ksetbZiLWi83LjwUVvAPRPcLCuIiZiKmNlXJ/pA7fN9qK0IXoPY9gpBVN+wjQfSBdKWxwE0TnbRBpMmZRuWsru99jYKLsnLTnfGF7L0bTrdSxp71pz57LxcfHP3eTljlxb2bO12ugFTQ9KeTlHdHk0HGeMY887NfS3GB4/B0R146zBmStoXCU/gVhGmDPv+ApLfOtds3fgbAAD//wMAUEsDBBQABgAIAAAAIQBXH0fKgQ8AAGeRAAANAAAAeGwvc3R5bGVzLnhtbOwda2/jxvF7gf4HQtcGSVGZpCRKos9yaktiE+CQHnIOWiAXBLREWczxoZLUnZwi/70zu3wspeXTpCTfWb6zxdfs7Lx2Zna4e/XtzraEj4bnm64z6cgXUkcwnIW7NJ2HSeenO6077gh+oDtL3XIdY9J5NPzOt9d//tOVHzxaxru1YQQCgHD8SWcdBJtLUfQXa8PW/Qt3YzhwZeV6th7Aofcg+hvP0Jc+PmRbYk+ShqKtm06HQri0F2WA2Lr3YbvpLlx7owfmvWmZwSOB1RHsxeX3D47r6fcWoLqTB/pC2MlDryfsPPinRg2RKwdt2ebCc313FVwAbNFdrcyFcYiyKqqivkggAfR6kGRFlHqp/u+8mpAGomd8NJGFMV6eWhPWMIaldq6vnK2t2YEvLNytE0w6g/iUQK98v4STckegXJ66S6D7r1//TXj191evpF+/eY3f339Njt7To6/+u3WD1136h9zxj1+/6YhRUwxceThIA6bP/IX+ITAvJCnjUSX96M9fWcHriUo/v7x69ep9F369eg24wfdv3gvxqQx4wyJU8DkxJNf11cp1Eqr1gEBE5C4/OO4nR8NroGtAS7zt+sr/XfioW3BGJo3rtkGPp4YTbL1H4Z9usDYXeG2l26b1SK/28ARRtvB22wTRJ2hQsDzgC9dyPSEADQVGtd+c02xf7rHHIbF6pP97/RECE8VUuugNVHUwVNTeUBoP5JHURldZbI7Auvq01H/jyMXJaMnFJlYBqs/tiY3cdgM90sC5yGV/iAYhD5vRSMbPaKz2n2Z9cvl6LnhQ9mfRQwaroY4Ho4E0Gii9IdhtHJdaFEZiw9psYHw09ucPPrnG+jRkP6UQxObumHTJN7xE1s9GMU6OTdonS9Fl0KhVEImrCK6daVmxn42uN564voIYJzA8R4MDIfx+97gB582BcIw6e+S+grsfPP1R7inlH/Bdy1wiFg9T1mWE8JC6WN3BBZhKtS+PlZ48HPcHUn/eJdJ8Hz5hOktjZ0B8AG48+sZMT+CI4luAdQYSEBZEft4IDTa0Px6rg748GGRgQDveHAYJGTJczfaJQNyM9puBuKcirZvmNiQgIgz6wO2BIg2Hw3EP+E1DgPZpwGBQUt6yaUAE37++une9JWRdosC6NwRdo+euryxjFYDGeObDGv8G7gZ+37tBAGmJ66ulqT+4jm6hTkVPsE9CugYyM5MOxIwOAKWmS98GbhjwiQg+hF54L8GBoFB4K6AZYVl4L+1McV8yqMCFzwa1QBikVk1ihZBYJee6KIWULA2ogMyl4RTxoDSgegwq5ktJBMnwX5qJkZTkNV/MzGfPg7zu7xnRkaKMFVntDeA/pXXS+yq2poZ+FmLShOoWNlJkA0NFqUC2J1H/6Hr7JGybJ14sc09T4RaHlWL7cWy5bcgzKCvpDNNpyy8CH3tXp7MWdf3BGlxvaHg5htg0NsaU8SzObIw49vjKjYjKesZfOO0wnj10xU5iaZ+rW8YXv3K+fGGfS7plR6Hd845GS4xTtWL9ODXED9DbCGMLmiwd4TaM+pkNz8/PMXlyju10PlWp8Klxp6g4DIC6lyh1y9dPRlkyBCZMcULGdGFY1jtMbf5nFadNZZwo2a2YoiEwkzihgnVJ+BXmRsKvNEUaHuibjfWIcyrkLnJ0SxKyeHx9pVvmg2ND9Y2wdj3zd4CH5Tk4LnewVi4wF3i8gBsMryN88vTNnbGDuhPoL856YAkKzarsVnvohTVNFMFeTQQFgvBbzw2MRUDq9rKRJiMhD+sCRBG3kI6FaMJ9CR2zqHoMpGklWkniVsD6JpKHpJtp6oPwpqRQHpJ6sQNMgJSJHIK0HIGRUPTYBiMrk4RRTKRNnmL+sLXvDU8jhaNtCBZwSzzQTAa//snwyzAxRQhjnWRIUPh6KGF8gpYzIFlWr8B+MOQssh/tsZvgXkS806EX2ubylpjh8wksCcNSrPgNBQ6UpazAVTejpAA434oCVnQ0r2vPqw73hSM8KT1ueRDaH3AY3mDzp7Gu1FSw7tD56l5zuIImEgHMMGM5YlnFAJ8vVQ8c4ojpIuuxU/+dcd1H6LPWcN13K+rDt+mllwsiIkwo+xnjhpX9eSFElYChDirUBS/C4mmBTB28ohDrFJiBz5mKANPMOx3FyuFFRez86XcsVZAZT4hPwVHKLYhCrYjPBXgmqgEJClK8mBcuNINMwtxGkWOSIFVErYI1SxMrlQ0pGv7bR67KsAkJsshx4pMKQmnG1dyXqVybX0QJjNJDp60hec7xEBtpLFdecxqXmei6Dpn3TSFHW3JaB7OQT+d0OFHRbhxmC6vIXzOUKaW55SJPNuBrn2tZ+lMZV8aqALvPctQvh9eZjfqgrXyv6UR4ykykW0BQEoTxlbn0uMsqd5T6z4x9SgQ2KeMH+D8P2sIguYfo0WhbybXIFA5cBCAMIfNG8xLDTJbByhSOZjoArzA+9x5AyuRZ8CDLP4W3vZ+JuqJP0TKpiyYIyGvFufMtmbp6BOxrW3KZmcWq78emvLU8r7mwNTQLNaKT6p5g8/1uzPOTmbmcgmiXO2odKaf4VDRP5W8xnE/5W7FjCM5Bjgg+Fe3yM45yYShfT1maqABhg6ononlMOSBJrrAgpJi8aLgrSMKT0oaFc0zMKA5f8+LB0Cgcf2qh9dQcr1appexcrYCqjGZx8WXqlFixhNAwYXTsA0VTdbgCE6nWYurAoujwCPFgGZyhsi103M4QaSaBCCaMmf6HtDz1Ns8E6VS5HSsfGWjHKYKzSRiUQLpMyrJZqS4OZFMFcCX6AILTznhR379nfMm0tBzmas40BZLZg8NM3hn1IOVpMF1ImXQ4oIamPU+jBcl5NsmzTMmJ6X6ORqeSay2XmSEuO+NeaZonK0iF5Uxq5WqOFbVmhX+92L86m/gvE9XYQTkbVJlJjFQUAOsIRiaumqRWDqbyC4GKooTMYPAz6kBrxq522MOaukwJSgbJatL+dAkqFJqsJCIsURZJfX0NrTwrV1gVcNzBgvWAilE7o1QL5qDzyyuA74V+fvnaI66YyUOmAJudWkib11jOWgs9qpcYo5hx6RcPW9ifxlKslbyWxsep8jWyhdYkE7d4nu50CpwtgckAfwIVJsXZUI7NvFeZfqsyLt4WcH3aSacn/VXoCjcLDIsSsuJrKFvTgrc8sSq7D11abH1Yee2Wngzfg9yHNXVtW2dSRSyIChCEn6VfIij4GkqCCKh6KTy2nge7HTzGtiAFBJSuChAWG3wLK8EGtLoMoJkeGGxYu/MutyZQ9X9S+OnCXwV/SckvSaEX/yAL/UavyIY8m+82lu7ogQuLyOMbquzYyuCnAPHKIKi5luV+MpbCd7ACqWeZzocYINrWpMOQHywD7zvYDAL2mRBiccJZpQQKzrBWAROHT5iuYcCUJH+ETRzNQC9YMAC1CjaJycZJBwadssQ5oDEmQBI4JdH53tlsE76nCYweepku/YBvYlpMcMqgURLEW8NDwxHBSHcFjsqg8XaNS95G7iHSt4yCyKHycBXkzgysGGRahtFul8HqzoWXw2OsQJQZ4qA3y4ORvBkD9ne5Y95nV+DVETgR7wwReOaHcHsHsuCruw1A79gz/lpfup/olhDkli39Hq0PjM4w8ajo6XvdNxBC3rrgLa/Hnb+u8f6av3vLCEervcYrWaJzwFvYl/8CTnZtVgD28UfgZfRCffwmP0j4bzCmmavHN7ofvAHakXeS/bUHBvDO1Uz68jvubAPG7F+4rCveAHjRiREhWrD1pw15MDqcwVYg5ETIU7r0ADqNT1sEr+TqfNCtcCVn6YK/OMPZLogZL3srElX50vQlWZT7RTdSC7MXi/SLbjADxec4lrzoxv7K3y+LWcfrSL+MG/ytGV58qiJX6GXceBk3yJZ5xK9/iTeY7bG+gE0QTjVupDfFO83eTHRHS3ZXTrKgGO7pSnf7tMWl+AgfDHgrbudzsvAlmfiAkCEqK287zk/v6/KZ7lURTb2CMCTvS2KKhuZC4Mt+yH7PjCwm893fT30tXFxa0WdzX5CyMZxlW0PTOahfoxoFKePcvZy+pHGNoUXhKtyf48r3X/KY9qJULSWnX5SKLCLMGeUORrPPIPlWbZXkzPkVmDKrOb/C+BKRe0EXfOcabO/hftLRtNn0RlVpGBetDn9yW3jK3XGbnI3b0/+DrRq/CAfjUM6KskeHT/B3Y+PK6T7/YNqx8patXL4ceuowarAeOtm5lhP05WCQsVvq2bdfSGQIiqu71pHRypzzPdNdO6Mgr3Cbz+hGNhgsfCiJGw/CRhRJqJgI9HvLIFsBJCVrHWFprPStFdzFFyedfxvGB+sROGMbgr82DKg/Ce96a350AwJi0km+v8EdV6HsiG0iLKXigNogDDKDv3C3+EIpKUlRD4u2ZJnWa2nw6eKvqKDrj1RLcwtSjLDnQED2d/60di2DdAaQDt91ItvKJr1PP7CGAgTD+9H9lNxPlt7Iun9lej7kcKyt7SRPkJEo6wkL6h/2H6D7HCRPAM8Y9oTbzwLPwlwP2UwaDsHk0X2lie2L6IE5pP0rSC9N41/B53hXJAlpzL+C17La4T+DsPjP4PmsK1m4Nduf4VgdTuft92dMWMRrRxmMZioRm33OTXszZc7lQn+k9BQuF26n+MPn3Fgac6HNJfzhPYNP8J+BjbdUPudUtd+H3RsyJHHKxW06zZKD4VCC7ar50LJwwyey2sGWsuSa39Ns6aWWKEt/+O2gHPDbyZYQfIL/DApVVn+yeqrNtanGlzegDZ9umjYf3c64XJhqN3xomqaqfGjzG/zhQptpoxmXPyhT/J72+1P48KBh+1kWKfsKBDdcXdA0lEUu1rfaeM7FegqknvL7IyuzEbH9+1rfh3QaX+JHfXU+I0PS/jPzqQbg+DTo9/lY5+iprA01lQetTz54Rdwbj2xvGw1NdJ4l9MlRRyh3Uqdv5sqsTxBOnU5iy9Tp+c30lhq19Om51tfGiM0ekPlQI6RNn5Zuxjc0bmWQFck9MKBCKvyND9u6w19h65lQNT6/HamzudbrjqXbcXfQN5SuqtzOuspgejubaarUk6Z/QOGqbTn+5U4eTDrrINhciqK/WBu27l/Y5sJzfXcVXCxg43l3tTIXhuhvsNCROFO2JfYkSRVV0dbJVvMA5NK34C4vdM5CZ+tdcm7SYQ6ou0XYAWizuKu9oXSjyFJX60tydzDUx93xsK90NUXuzYaD27miKQzuSj3cZUmU5QR55RIdRSyOTaN/x56ddPAwpxNixAnRx82q3qHbef1/AAAA//8DAFBLAwQUAAYACAAAACEA3uas88YBAACZAwAAFAAAAHhsL3NoYXJlZFN0cmluZ3MueG1sdFNdb5swFH2ftP9w5feGQKamiYDKI27GxpcMUZVHRNyGCewMO9GyXz87SbMOUoSQfM69l3POBffxd9vAgXWyFtxD9miMgPFKbGr+6qFV8XT3gECqkm/KRnDmoSOT6NH//MmVUoHu5dJDW6V2c8uS1Za1pRyJHeOaeRFdWyp97F4tuetYuZFbxlTbWM54fG+1Zc0RVGLPlYecCYI9r3/tWXABbOS7svZd5S/w2rWU71rm+AYVpI8VaYGj/8FOtxuNc7krK61di5CsOzDkPxPyI1rDuVyXmTvTD/kHDmXjock9sny3Eo3oQGlXutlGoGqjdTxyvsxm06ltrunDbGJKuyfB1bk3YFztuyMshdrWlSFfyrZujmfWMcApKXYG2vKn6AxonRQovwhjApQEKV1c9b3zTuIsSteEALmLcRjN+zkYa0CSRZgsB1yME7wkdIC/zewTt8O7xPZvHafo4Vu6onlfDcUFgYzQE3tzZZAN93v1mIfLBBcrOtj2xQl8WLAAiuM010kUhGY0zEkOURT0JQSYplGYYCB5QUkU4X7B9/Srfsnwc9PDV0kxGCeafcvt27DTh682Exy/c2jpX8v/CwAA//8DAFBLAwQUAAYACAAAACEAQb/4YNkAAADKAQAAIwAAAHhsL3dvcmtzaGVldHMvX3JlbHMvc2hlZXQxLnhtbC5yZWxzrJHBTsMwDEDvSPxD5DtJuwNCaOkuCGlXGB/gpW4b0TpRbBD7e4J2odMkLpws2/Lzk73dfS2z+aQiMbGH1jZgiEPqI48e3g7Pdw9gRJF7nBOThxMJ7Lrbm+0Lzah1SKaYxVQKi4dJNT86J2GiBcWmTFw7QyoLak3L6DKGdxzJbZrm3pXfDOhWTLPvPZR9vwFzOOW6+W92GoYY6CmFj4VYr6xwiseZKhDLSOrB2nNFzqG1VRbcdY/2Pz1yiaxUXkm1HlpWRhc9d5G39hj5R9KtPtB9AwAA//8DAFBLAwQUAAYACAAAACEAUzZkbUUAAADcAAAAJwAAAHhsL3ByaW50ZXJTZXR0aW5ncy9wcmludGVyU2V0dGluZ3MxLmJpbmJgoAwwsjCz3QEaEfy+gZGRgZHhFVc+hzOQ5meIYGIC0hFMzEDShyGVoQQIUxmKKLQPpJ0RagaIZkLioxsNAAAA//8DAFBLAwQUAAYACAAAACEAUDeczc0DAAA6CgAAFAAAAHhsL3RhYmxlcy90YWJsZTEueG1spFZbb9s2FH4f0P9AsMWQAlYkxpJteZYL34R4SOvBVtoNQR5YiYqJSKJBUY2Nof99h5Lq+DZA6/SgC3V4Ds93vnMZfNimCfrGZM5F5mFybWHEslBEPHvy8H3gGz2MckWziCYiYx7esRx/GL75ZaDo14Qh2J3lHl4rtembZh6uWUrza7FhGfyJhUypgk/5ZOYbyWiUrxlTaWLeWFbHTCnPcKWhn4ZNlKRUPhcbIxTphir+lSdc7UpdGKVhf/6UCalP5eGtRFvZ/qF8K8+UpzyUIhexugZlpohjHrKzMxLblOwb19C8qmr/pK7OXheci0cevgGdsl/o17+t+jLgOdE3y/DhKm8//n3HKKMpOBfwlK00kBhFPN8kdPfpdF2y2MNjYvXnpIuREoom+VK8rNbiBaIMMV5DMJiEpek2nsMJCKxFVNH6E4K+lxgLCaL1DxcPB7RQwueJYhId27nojlu5YxHwqXQFYq+v76ApLrVMRFKkGQpFok+iD8ejiGXjQqmSk9i8LEkaSwLUDXVCbBpK2o0lncaSncaSENUL5zRfQzOsErTCNgdwi0x5uAegl4lbY67JBzBCrpwTkVTxqsOnQwYhrCJXE3E6+uuINV3QHtIkLBKqWFSZ8KEGwPdw7s+Wy8XyKpj9GVztGfzw8DZY8xwBER9bD9NRMHt8bGEKF37fQhi/H5j/pnBgHjhy7hUw+NUrd9xtu12/Z9hTQgx71hsb7sgHZnbGFrEn9sSZ9vbphY586mj2nUJWpm4jyPZk30MWzI70Azl03k1YkqzUTteuKYDXAMi5f/Xu9l3Ps1oYt/Sb4fxPyHS9bEaE9gkRfl+M0Wp+4pl9CTnImoY27BMbo4+L+0/BEXbtSxYA0IYWnBMLFWEhHQ4K4c0lE5CmDU10LpoA+hyYIJdMQH43NNE9MREsgtHdkQGrAZtW9x+vZoT0bwn5jyw6TMO8TpWSyfMsFjXrvzD2nOyQgsaFyhEAZgpoRT6XuapQL8uQXrujZ0u6cSnJNwwGDegOWqradLAKScq26i5X5RMVkkNXdSx7RFzLMXyH2IYdd2Kj1+t2DUj5m/bIcdttZwRpX84w/S2xf66zW67pVrPMcABK+tVgRBMVwIlWRQpDy87Ds0z3yyV7gmIoW2gBI5eGo4VWPHxuIRiw0GcawlQjMrQWhcwRTE+I0XCNXgC9iO4QL3sktMocTcoNU72kdP0sbV6jQDd6dFtu/5Wmm9/qlT9gN5UM6fYAExmHmgrheK2siCqY+iIkYrQvzZVOzU0T/KjuJb5VwIf/AAAA//8DAFBLAwQUAAYACAAAACEArTHUXaQAAADaAAAAFQAAAHhsL3BlcnNvbnMvcGVyc29uLnhtbGTNvQ7CMAwE4B2Jd6i8k7QMqKr6szExwgNEqdtEauwqtlB5e4oYu57uvmuHLS3FG7NEpg4qU0KB5HmMNHfwet4vNRSijka3MGEHHxQY+vOpXfcN0yOKFjtB0kFQXRtrxQdMTkyKPrPwpMZzsjxN0aOVNaMbJSBqWuy1rGqr4RfhuLcSkgr8vWY7iLwi7V8T5+RUDOf54JU3m1wksP0XAAD//wMAUEsDBBQABgAIAAAAIQC6ASTwDQEAAAgDAAAQAAAAeGwvY2FsY0NoYWluLnhtbHSS3U7DIBiGz028B/Kdb5ROpzGlS2r3w7leAKG4NmlpA8To3Ys/UEfHCQlPn7y8fKXYfQw9epfadKOiQNYZIKnE2HTqTOH15bB6BGQsVw3vRyUpfEoDu/L2phC8F88t7xRyCcpQaK2dnjA2opUDN+txksp9eRv1wK3b6jM2k5a8Ma2UduhxnmVbPLgAKAuBNIUDcWd1rgSg/nvFnueu1C93x8z8GHxvHhPmaWGeEuZ+Ye4TZk0erratZn7Rtib3V/2abP+4v0UVCIoS3GR+5jCbnsTm3cL0JDbzhelJbG4WpieXJgs39T0ZifswEqcxEjdhYZJzTjwrlngzLPHXqv/dcHjD5RcAAAD//wMAUEsDBBQABgAIAAAAIQDCLJZggQAAAJAAAAAZAAAAZG9jTWV0YWRhdGEvTGFiZWxJbmZvLnhtbBTMQQ6DIBAAwK+QvVeop8aIfkAfscJSSYA17rZpf996ncOM86cW86ZTMjcP986BoRY45vb08NJ0e4ARxRaxcCMPXxKYpzGUrQwFNypLFjX/pMlwoYdd9RislbBTRelqDicLJ+0CV8sp5UC2d72zNR/LNaykGFERjJ1+AAAA//8DAFBLAwQUAAYACAAAACEAYNDg5EwBAABmAgAAEQAIAWRvY1Byb3BzL2NvcmUueG1sIKIEASigAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfJJRS8MwFIXfBf9DyXubtHObDW0HKntyIFhRfAvJ3RZs0pBEu/17s3arGwzfcu85+XLuJcVip5roB6yTrS5RmhAUgeatkHpTord6Gd+jyHmmBWtaDSXag0OL6vam4Iby1sKLbQ1YL8FFgaQd5aZEW+8NxdjxLSjmkuDQQVy3VjEfSrvBhvEvtgGcETLDCjwTzDN8AMZmJKIjUvARab5t0wMEx9CAAu0dTpMU/3k9WOWuXuiVM6eSfm/CTMe452zBB3F075wcjV3XJd2kjxHyp/hj9fzajxpLfdgVB1QVglMvfQNVgf+O4cQtMN/aoT0WYZsNc34VFr+WIB72Qb/SE7yfYYCAiEIqOsxwUt4nj0/1ElUZySYxyWKS11lGyZxO7z4PSS7uH1IODXV8+H/iNCazOM3rdE6znE7zM+IJMOS+/BnVLwAAAP//AwBQSwMEFAAGAAgAAAAhADbalRoBAgAAuwQAABAACAFkb2NQcm9wcy9hcHAueG1sIKIEASigAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAnFRNb9swDL0P2H/wfOmp/mjddAhkFUO6LYd1CxK3PQ6aTMdCZMmQ1Czerx9tp467BkO2G0U+P1KPTyY3u0p6WzBWaJX6cRD5Hiiuc6HWqX+ffTp/73vWMZUzqRWkfgPWv6Fv35CF0TUYJ8B6SKFs6pfO1dMwtLyEitkAyworhTYVc3g061AXheBwq/lTBcqFF1E0CWHnQOWQn9cDod8zTrfuf0lzzdv57EPW1DgwJRlUtWQOaHYXTxLsm0QkHJLkQ11LwZlDEeid4EZbXTjv446DJOG4SHD4FfAnI1xDkWJ8JCvOJMywLy2YtEDCQ4LMgbWaLpgwlpKtm26BO208K36hqonv/WAW2mlTf8uMYMrh1C2sP3SxrK0z9FGbjS0BnCUhAvpkF46x41gkNO4AGPwV2HN9ZRXk3pKpNfxLi+vjLdoZ+7ti75cqZMJJsN+KBTPuiCjovIMo3Wi9JHsZADay8TJRgbcErk0+lmMQ5uzxFe7s3cII5b737Y9+tdQ/u+oS1miJOAhmVyfgLoLgc3IC7jII5vEphAkSxpMTGK9axn4Bez8MAnT36Nc/tkrnPtzIHzuY6apmqsHCEH0RamPv60zftu9n7+yXSbIqmYEcH8Pg/CFB5mhqI1uSWdl6Kn/GvC607/Ch/xfReBJElxE+sVGOhIe/Dv0NAAD//wMAUEsBAi0AFAAGAAgAAAAhAMnCkCDAAQAA1QYAABMAAAAAAAAAAAAAAAAAAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECLQAUAAYACAAAACEAMR2JzSIBAADeAgAACwAAAAAAAAAAAAAAAAD5AwAAX3JlbHMvLnJlbHNQSwECLQAUAAYACAAAACEAGYYyUocDAAAFCQAADwAAAAAAAAAAAAAAAABMBwAAeGwvd29ya2Jvb2sueG1sUEsBAi0AFAAGAAgAAAAhAEXiwUknAQAAvAMAABoAAAAAAAAAAAAAAAAAAAsAAHhsL19yZWxzL3dvcmtib29rLnhtbC5yZWxzUEsBAi0AFAAGAAgAAAAhAPEOUU6zDQAAR0EAABgAAAAAAAAAAAAAAAAAZw0AAHhsL3dvcmtzaGVldHMvc2hlZXQxLnhtbFBLAQItABQABgAIAAAAIQA8QzemjQYAAPEbAAATAAAAAAAAAAAAAAAAAFAbAAB4bC90aGVtZS90aGVtZTEueG1sUEsBAi0AFAAGAAgAAAAhAFcfR8qBDwAAZ5EAAA0AAAAAAAAAAAAAAAAADiIAAHhsL3N0eWxlcy54bWxQSwECLQAUAAYACAAAACEA3uas88YBAACZAwAAFAAAAAAAAAAAAAAAAAC6MQAAeGwvc2hhcmVkU3RyaW5ncy54bWxQSwECLQAUAAYACAAAACEAQb/4YNkAAADKAQAAIwAAAAAAAAAAAAAAAACyMwAAeGwvd29ya3NoZWV0cy9fcmVscy9zaGVldDEueG1sLnJlbHNQSwECLQAUAAYACAAAACEAUzZkbUUAAADcAAAAJwAAAAAAAAAAAAAAAADMNAAAeGwvcHJpbnRlclNldHRpbmdzL3ByaW50ZXJTZXR0aW5nczEuYmluUEsBAi0AFAAGAAgAAAAhAFA3nM3NAwAAOgoAABQAAAAAAAAAAAAAAAAAVjUAAHhsL3RhYmxlcy90YWJsZTEueG1sUEsBAi0AFAAGAAgAAAAhAK0x1F2kAAAA2gAAABUAAAAAAAAAAAAAAAAAVTkAAHhsL3BlcnNvbnMvcGVyc29uLnhtbFBLAQItABQABgAIAAAAIQC6ASTwDQEAAAgDAAAQAAAAAAAAAAAAAAAAACw6AAB4bC9jYWxjQ2hhaW4ueG1sUEsBAi0AFAAGAAgAAAAhAMIslmCBAAAAkAAAABkAAAAAAAAAAAAAAAAAZzsAAGRvY01ldGFkYXRhL0xhYmVsSW5mby54bWxQSwECLQAUAAYACAAAACEAYNDg5EwBAABmAgAAEQAAAAAAAAAAAAAAAAAfPAAAZG9jUHJvcHMvY29yZS54bWxQSwECLQAUAAYACAAAACEANtqVGgECAAC7BAAAEAAAAAAAAAAAAAAAAACiPgAAZG9jUHJvcHMvYXBwLnhtbFBLBQYAAAAAEAAQADAEAADZQQAAAAA=';
-  const binary = atob(TEMPLATE_B64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const wb = XLSX.read(bytes, { type: 'array', cellStyles: true, cellFormulas: true });
-  const ws = wb.Sheets['Weekly Time Record'];
-
-  // Fill in employee name (H6 is merged, write to G6 which is the start cell)
-  ws['H6'] = { v: w.name, t: 's' };
-
-  // Week ending date = last day in the filtered records
-  const weekEnding = recs.length > 0 ? recs[recs.length - 1].date : '';
-  if (weekEnding) {
-    // Template uses H8 as week ending — set as Excel date serial number so formulas work
-    const d = new Date(weekEnding + 'T12:00:00');
-    const excelDate = Math.floor((d - new Date(1899, 11, 30)) / 86400000);
-    ws['H8'] = { v: excelDate, t: 'n', z: 'mm/dd/yyyy' };
+  if (periodKey) {
+    dailyRecs  = dailyRecs.filter(r => recordInPeriod(r, periodKey));
+    hourlyRecs = hourlyRecs.filter(e => recordInPeriod(e, periodKey));
+  } else if (dailyRecs.length > 0 || hourlyRecs.length > 0) {
+    const allDates = [...dailyRecs.map(r => r.date), ...hourlyRecs.map(e => e.date)];
+    const latestDate = allDates.sort().pop();
+    periodKey = getPayPeriod(latestDate).key;
+    dailyRecs  = dailyRecs.filter(r => recordInPeriod(r, periodKey));
+    hourlyRecs = hourlyRecs.filter(e => recordInPeriod(e, periodKey));
   }
 
-  // Rate per day in F19 (template calls it RATE PER HOUR — we use it as daily rate)
-  ws['F19'] = { v: w.wage, t: 'n', z: '"$"#,##0.00' };
+  // Merge all entries sorted by date
+  const allEntries = [
+    ...dailyRecs.map(r => ({ date: r.date, type: 'daily', location: r.location, note: r.note, amount: w.wage })),
+    ...hourlyRecs.map(e => ({ date: e.date, type: 'hourly', hours: e.hours, rate: e.rate, amount: e.hours * e.rate }))
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
-  // Fill rows 11-17: the template auto-derives DAY and DATE from H8
-  // We fill E (JOB SITE) and F (AMOUNT) for each day worked
-  // Rows 11-17 = 7 possible rows. Match by date offset from week ending.
-  const dayRows = [11, 12, 13, 14, 15, 16, 17];
+  const [periodStart, periodEnd] = periodKey ? periodKey.split('|') : ['', ''];
 
-  // Clear any existing amounts first
-  dayRows.forEach(row => {
-    ['E','F','G','H'].forEach(col => {
-      const addr = col + row;
-      if (ws[addr]) ws[addr] = { v: '', t: 's' };
+  // Load the real template file
+  try {
+    const response = await fetch('/templates/WEEKLY_TIMESHEET_TEMPLATE.xlsx');
+    const arrayBuffer = await response.arrayBuffer();
+    const wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true, cellFormulas: true });
+    const ws = wb.Sheets['Weekly Time Record'];
+
+    // Employee name
+    ws['H6'] = { ...ws['H6'], v: w.name, t: 's' };
+
+    // Week ending = Tuesday (periodEnd)
+    if (periodEnd) {
+      const endDate   = parseLocalDate(periodEnd);
+      const excelDate = Math.floor((endDate - new Date(1899, 11, 30)) / 86400000);
+      ws['H8'] = { ...ws['H8'], v: excelDate, t: 'n', z: 'mm/dd/yyyy' };
+    }
+
+    // Rate row — for mixed periods show daily wage; hourly rates shown per-row
+    ws['F19'] = { ...ws['F19'], v: w.wage, t: 'n', z: '"$"#,##0.00' };
+
+    const dayRows = [11, 12, 13, 14, 15, 16, 17];
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+    // Clear existing daily data, preserve styles
+    dayRows.forEach(row => {
+      ['B','D','E','F','G','H'].forEach(col => {
+        const addr = col + row;
+        ws[addr] = { ...ws[addr], v: '', t: 's' };
+      });
+      ws['I' + row] = { ...ws['I' + row], v: 0, t: 'n', z: '"$"#,##0.00' };
     });
-  });
 
-  // Place each record into the correct row based on its date offset from week ending
-  if (weekEnding) {
-    const endDate = new Date(weekEnding + 'T12:00:00');
-    recs.forEach(rec => {
-      const recDate = new Date(rec.date + 'T12:00:00');
-      const daysFromEnd = Math.round((endDate - recDate) / 86400000);
-      // Row 17 = week ending day, row 16 = day before, etc.
-      const rowIndex = 17 - daysFromEnd;
-      if (rowIndex >= 11 && rowIndex <= 17) {
-        ws['E' + rowIndex] = { v: rec.location + (rec.note ? ' — ' + rec.note : ''), t: 's' };
-        ws['F' + rowIndex] = { v: w.wage, t: 'n', z: '"$"#,##0.00' };
-      }
-    });
+    // Fill each day of the pay period
+    if (periodStart) {
+      const startDate = parseLocalDate(periodStart);
+      dayRows.forEach((row, index) => {
+        const currentDate = addDays(startDate, index);
+        const currentYMD  = toYMD(currentDate);
+
+        ws['B' + row] = { ...ws['B' + row], v: dayNames[currentDate.getDay()], t: 's' };
+        const excelDay = Math.floor((currentDate - new Date(1899, 11, 30)) / 86400000);
+        ws['D' + row] = { ...ws['D' + row], v: excelDay, t: 'n', z: 'mm/dd/yyyy' };
+
+        // Get all entries for this date (could be daily + hourly on same day)
+        const dayEntries = allEntries.filter(e => e.date === currentYMD);
+        if (dayEntries.length > 0) {
+          // Build description and total for this row
+          const desc = dayEntries.map(e => {
+            if (e.type === 'daily') return e.location + (e.note ? ' — ' + e.note : '');
+            return `${e.hours}h @ $${e.rate}/hr`;
+          }).join(' | ');
+          const total = dayEntries.reduce((s, e) => s + e.amount, 0);
+
+          ws['E' + row] = { ...ws['E' + row], v: desc,  t: 's' };
+          ws['F' + row] = { ...ws['F' + row], v: total, t: 'n', z: '"$"#,##0.00' };
+          ws['I' + row] = { ...ws['I' + row], v: total, t: 'n', z: '"$"#,##0.00' };
+        }
+      });
+    }
+
+    // Totals
+    ws['I18'] = { ...ws['I18'], f: 'SUM(I11:I17)', t: 'n', z: '"$"#,##0.00' };
+    ws['I20'] = { ...ws['I20'], f: 'SUM(I11:I17)', t: 'n', z: '"$"#,##0.00' };
+
+    const lastName  = w.name.split(' ').pop();
+    const safePeriod = periodStart && periodEnd ? `${periodStart}_to_${periodEnd}` : 'export';
+    XLSX.writeFile(wb, `${lastName}_Timesheet_${safePeriod}.xlsx`);
+    toast('⬇ Downloaded timesheet for ' + w.name, true);
+  } catch (e) {
+    toast('Error generating file: ' + e.message);
+    console.error(e);
   }
-
-  const lastName = w.name.split(' ').pop();
-  const period   = monthFilter ? monthFilter.replace('-','_') : 'all';
-  XLSX.writeFile(wb, `${lastName}_Timesheet_${period}.xlsx`);
-  toast('⬇ Downloaded timesheet for ' + w.name, true);
 }
+
 
 // ═══════════════════════════════════════
 // MANAGE WORKERS
