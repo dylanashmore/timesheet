@@ -25,10 +25,11 @@ const recordSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const hourlySchema = new mongoose.Schema({
-  workerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', required: true },
-  date:     { type: String, required: true },
-  hours:    { type: Number, required: true, min: 0 },
-  rate:     { type: Number, required: true, min: 0 },
+  workerId: { type: String, required: true },
+  date: { type: String, required: true },
+  location: { type: String, default: '' },
+  hours: { type: Number, required: true },
+  rate: { type: Number, required: true }
 }, { timestamps: true });
 
 const Worker = mongoose.models.Worker || mongoose.model('Worker', workerSchema);
