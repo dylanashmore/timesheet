@@ -1,4 +1,4 @@
-const { connectDB, Worker, Record, Hourly } = require('../_db');
+const { connectDB, Worker, Record, Hourly } = require('./_db');
 const ExcelJS = require('exceljs');
 const path = require('path');
 
