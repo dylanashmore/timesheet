@@ -49,6 +49,7 @@ module.exports = async (req, res) => {
     const templateBuffer = await templateRes.arrayBuffer();
 
     const workbook = new ExcelJS.Workbook();
+
     await workbook.xlsx.load(Buffer.from(templateBuffer), {
       ignoreNodes: ['autoFilter', 'tableParts', 'extLst']
     });
@@ -59,6 +60,7 @@ module.exports = async (req, res) => {
       throw new Error('No worksheet found in template');
     }
 
+    // Top template fields
     ws.getCell('H6').value = worker.name;
 
     if (periodEnd) {
@@ -66,46 +68,100 @@ module.exports = async (req, res) => {
       ws.getCell('H8').numFmt = 'mm/dd/yyyy';
     }
 
-    ws.getCell('F19').value = worker.wage;
+    // Daily wage reference row
+    ws.getCell('F19').value = Number(worker.wage || 0);
     ws.getCell('F19').numFmt = '"$"#,##0.00';
 
-    const entryMap = {};
+    const dayNames = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday'
+    ];
 
-    dailyRecords.forEach(r => {
-      if (!entryMap[r.date]) entryMap[r.date] = [];
-      entryMap[r.date].push({
-        desc: r.location + (r.note ? ' — ' + r.note : ''),
-        amount: worker.wage
-      });
-    });
-
-    hourlyRecords.forEach(e => {
-      if (!entryMap[e.date]) entryMap[e.date] = [];
-      entryMap[e.date].push({
-        desc: `${e.hours}h @ $${e.rate}/hr`,
-        amount: e.hours * e.rate
-      });
-    });
-
+    // Fill rows 11–17 for the selected pay period
     for (let i = 0; i < 7; i++) {
       const row = 11 + i;
 
-      ws.getCell('E' + row).value = null;
-      ws.getCell('F' + row).value = null;
+      // Clear old row values but keep formatting
+      ws.getCell(`B${row}`).value = null; // Day
+      ws.getCell(`C${row}`).value = null; // Date
+      ws.getCell(`D${row}`).value = null; // Job Site
+      ws.getCell(`E${row}`).value = null; // Amount
+      ws.getCell(`F${row}`).value = null; // Leave alone / extra column if template has it
 
-      if (periodStart) {
-        const d = new Date(periodStart + 'T12:00:00');
-        d.setDate(d.getDate() + i);
+      if (!periodStart) continue;
 
-        const dateKey = d.toISOString().split('T')[0];
-        const entries = entryMap[dateKey];
+      const d = new Date(periodStart + 'T12:00:00');
+      d.setDate(d.getDate() + i);
 
-        if (entries && entries.length > 0) {
-          ws.getCell('E' + row).value = entries.map(e => e.desc).join(' | ');
-          ws.getCell('F' + row).value = entries.reduce((s, e) => s + e.amount, 0);
-          ws.getCell('F' + row).numFmt = '"$"#,##0.00';
-        }
-      }
+      const dateKey = d.toISOString().split('T')[0];
+
+      const dailyForDay = dailyRecords.filter(r => r.date === dateKey);
+      const hourlyForDay = hourlyRecords.filter(e => e.date === dateKey);
+
+      const entries = [];
+
+      // Daily attendance entries: amount = worker's daily wage
+      dailyForDay.forEach(r => {
+        entries.push({
+          type: 'daily',
+          jobSite: r.location || '',
+          note: r.note || '',
+          amount: Number(worker.wage || 0),
+          description: ''
+        });
+      });
+
+      // Hourly entries: amount = hours × rate
+      hourlyForDay.forEach(e => {
+        const hours = Number(e.hours || 0);
+        const rate = Number(e.rate || 0);
+
+        entries.push({
+          type: 'hourly',
+          jobSite: e.location || 'Hourly Entry',
+          note: '',
+          amount: hours * rate,
+          description: `${hours}h × $${rate}/hr`
+        });
+      });
+
+      if (entries.length === 0) continue;
+
+      const totalForDay = entries.reduce((sum, entry) => {
+        return sum + Number(entry.amount || 0);
+      }, 0);
+
+      const jobSiteText = entries
+        .map(entry => {
+          let text = entry.jobSite || '';
+
+          if (entry.note) {
+            text += ` — ${entry.note}`;
+          }
+
+          if (entry.type === 'hourly' && entry.description) {
+            text += text ? ` (${entry.description})` : entry.description;
+          }
+
+          return text;
+        })
+        .filter(Boolean)
+        .join(' | ');
+
+      ws.getCell(`B${row}`).value = dayNames[d.getDay()];
+
+      ws.getCell(`C${row}`).value = d;
+      ws.getCell(`C${row}`).numFmt = 'm/d/yyyy';
+
+      ws.getCell(`D${row}`).value = jobSiteText;
+
+      ws.getCell(`E${row}`).value = totalForDay;
+      ws.getCell(`E${row}`).numFmt = '"$"#,##0.00';
     }
 
     const lastName = worker.name.split(' ').pop();
