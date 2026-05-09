@@ -52,6 +52,10 @@ const hourlySchema = new mongoose.Schema({
   workerId: { type: String, required: true },
   date: { type: String, required: true },
   location: { type: String, default: '' },
+
+  timeIn: { type: String, default: '' },
+  timeOut: { type: String, default: '' },
+
   hours: { type: Number, required: true },
   rate: { type: Number, required: true }
 }, { timestamps: true });
