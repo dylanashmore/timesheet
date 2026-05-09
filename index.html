@@ -1035,109 +1035,37 @@ function renderView() {
 }
 
 // ═══════════════════════════════════════
-// XLSX EXPORT — fills actual template
+// XLSX EXPORT — server-side via ExcelJS
 // ═══════════════════════════════════════
 async function downloadXLSX(workerId, periodKey) {
   const w = workers.find(x => x._id === workerId);
   if (!w) return;
 
-  let dailyRecs  = records.filter(r => r.workerIds.includes(workerId));
-  let hourlyRecs = hourlyEntries.filter(e => e.workerId === workerId);
-
-  if (periodKey) {
-    dailyRecs  = dailyRecs.filter(r => recordInPeriod(r, periodKey));
-    hourlyRecs = hourlyRecs.filter(e => recordInPeriod(e, periodKey));
-  } else if (dailyRecs.length > 0 || hourlyRecs.length > 0) {
-    const allDates = [...dailyRecs.map(r => r.date), ...hourlyRecs.map(e => e.date)];
-    const latestDate = allDates.sort().pop();
-    periodKey = getPayPeriod(latestDate).key;
-    dailyRecs  = dailyRecs.filter(r => recordInPeriod(r, periodKey));
-    hourlyRecs = hourlyRecs.filter(e => recordInPeriod(e, periodKey));
-  }
-
-  // Merge all entries sorted by date
-  const allEntries = [
-    ...dailyRecs.map(r => ({ date: r.date, type: 'daily', location: r.location, note: r.note, amount: w.wage })),
-    ...hourlyRecs.map(e => ({ date: e.date, type: 'hourly', hours: e.hours, rate: e.rate, amount: e.hours * e.rate }))
-  ].sort((a, b) => a.date.localeCompare(b.date));
-
   const [periodStart, periodEnd] = periodKey ? periodKey.split('|') : ['', ''];
 
-  // Load the real template file
+  const params = new URLSearchParams({ workerId });
+  if (periodStart) params.set('periodStart', periodStart);
+  if (periodEnd)   params.set('periodEnd',   periodEnd);
+
+  toast('Generating timesheet...');
   try {
-    const response = await fetch('/templates/WEEKLY_TIMESHEET_TEMPLATE.xlsx');
-    const arrayBuffer = await response.arrayBuffer();
-    const wb = XLSX.read(arrayBuffer, { type: 'array', cellStyles: true, cellFormulas: true });
-    const ws = wb.Sheets['Weekly Time Record'];
-
-    // Employee name
-    ws['H6'] = { ...ws['H6'], v: w.name, t: 's' };
-
-    // Week ending = Tuesday (periodEnd)
-    if (periodEnd) {
-      const endDate   = parseLocalDate(periodEnd);
-      const excelDate = Math.floor((endDate - new Date(1899, 11, 30)) / 86400000);
-      ws['H8'] = { ...ws['H8'], v: excelDate, t: 'n', z: 'mm/dd/yyyy' };
-    }
-
-    // Rate row — for mixed periods show daily wage; hourly rates shown per-row
-    ws['F19'] = { ...ws['F19'], v: w.wage, t: 'n', z: '"$"#,##0.00' };
-
-    const dayRows = [11, 12, 13, 14, 15, 16, 17];
-    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-    // Clear existing daily data, preserve styles
-    dayRows.forEach(row => {
-      ['B','D','E','F','G','H'].forEach(col => {
-        const addr = col + row;
-        ws[addr] = { ...ws[addr], v: '', t: 's' };
-      });
-      ws['I' + row] = { ...ws['I' + row], v: 0, t: 'n', z: '"$"#,##0.00' };
-    });
-
-    // Fill each day of the pay period
-    if (periodStart) {
-      const startDate = parseLocalDate(periodStart);
-      dayRows.forEach((row, index) => {
-        const currentDate = addDays(startDate, index);
-        const currentYMD  = toYMD(currentDate);
-
-        ws['B' + row] = { ...ws['B' + row], v: dayNames[currentDate.getDay()], t: 's' };
-        const excelDay = Math.floor((currentDate - new Date(1899, 11, 30)) / 86400000);
-        ws['D' + row] = { ...ws['D' + row], v: excelDay, t: 'n', z: 'mm/dd/yyyy' };
-
-        // Get all entries for this date (could be daily + hourly on same day)
-        const dayEntries = allEntries.filter(e => e.date === currentYMD);
-        if (dayEntries.length > 0) {
-          // Build description and total for this row
-          const desc = dayEntries.map(e => {
-            if (e.type === 'daily') return e.location + (e.note ? ' — ' + e.note : '');
-            return `${e.hours}h @ $${e.rate}/hr`;
-          }).join(' | ');
-          const total = dayEntries.reduce((s, e) => s + e.amount, 0);
-
-          ws['E' + row] = { ...ws['E' + row], v: desc,  t: 's' };
-          ws['F' + row] = { ...ws['F' + row], v: total, t: 'n', z: '"$"#,##0.00' };
-          ws['I' + row] = { ...ws['I' + row], v: total, t: 'n', z: '"$"#,##0.00' };
-        }
-      });
-    }
-
-    // Totals
-    ws['I18'] = { ...ws['I18'], f: 'SUM(I11:I17)', t: 'n', z: '"$"#,##0.00' };
-    ws['I20'] = { ...ws['I20'], f: 'SUM(I11:I17)', t: 'n', z: '"$"#,##0.00' };
-
-    const lastName  = w.name.split(' ').pop();
+    const res = await fetch(`/api/export/${workerId}?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const lastName   = w.name.split(' ').pop();
     const safePeriod = periodStart && periodEnd ? `${periodStart}_to_${periodEnd}` : 'export';
-    XLSX.writeFile(wb, `${lastName}_Timesheet_${safePeriod}.xlsx`);
+    a.href     = url;
+    a.download = `${lastName}_Timesheet_${safePeriod}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
     toast('⬇ Downloaded timesheet for ' + w.name, true);
   } catch (e) {
-    toast('Error generating file: ' + e.message);
+    toast('Error: ' + e.message);
     console.error(e);
   }
 }
-
-
 // ═══════════════════════════════════════
 // MANAGE WORKERS
 // ═══════════════════════════════════════
