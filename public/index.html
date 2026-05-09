@@ -525,12 +525,146 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
 .add-worker-form input:focus { border-color: var(--green-mid); }
 
 @media (max-width: 640px) {
-  header { padding: 0 16px; }
-  .view-strip { padding: 0 16px; }
-  main { padding: 20px 14px; }
-  .wc-header { grid-template-columns: 1fr auto; gap: 8px; }
-  .wc-days-count, .wc-wage { display: none; }
-  .form-card { padding: 18px; }
+  header {
+    padding: 0 16px;
+  }
+
+  .h-logo {
+    font-size: 14px;
+  }
+
+  .h-right {
+    gap: 8px;
+  }
+
+  .h-role {
+    font-size: 10px;
+  }
+
+  .btn-lock {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .view-strip {
+    padding: 0 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .view-tab {
+    padding: 13px 14px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  main {
+    padding: 20px 12px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .form-card {
+    padding: 16px;
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-row select {
+    width: 100%;
+  }
+
+  #hourly-form-card > div:nth-child(2) {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  #hourly-form-card select,
+  #hourly-form-card input,
+  #hourly-form-card button {
+    width: 100% !important;
+  }
+
+  .worker-card {
+    width: 100%;
+  }
+
+  .wc-header {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+
+  .wc-name {
+    font-size: 17px;
+  }
+
+  .wc-days-count,
+  .wc-wage {
+    display: block;
+    font-size: 12px;
+  }
+
+  .dl-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .wc-days {
+    padding: 12px 14px;
+    display: block;
+  }
+
+  .day-chip {
+    width: 100%;
+    display: block;
+    margin-bottom: 8px;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .day-chip .loc {
+    display: block;
+    margin-top: 2px;
+  }
+
+  .mw-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .mw-name-static,
+  .mw-wage-static {
+    width: 100%;
+  }
+
+  .mw-row input {
+    max-width: none !important;
+    width: 100%;
+  }
+
+  .mw-row .btn-sm {
+    width: 100%;
+  }
+
+  .add-worker-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .add-worker-form input,
+  .add-worker-form button {
+    width: 100%;
+  }
 }
 </style>
 </head>
