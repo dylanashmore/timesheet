@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
   const hourlyRecords = await Hourly.find(hrFilter).sort({ date: 1 });
 
   // Load template
-  const templatePath = path.join(__dirname, '..', 'templates', 'WEEKLY_TIMESHEET_TEMPLATE.xlsx');
+  const templatePath = path.join(process.cwd(), 'public', 'templates', 'WEEKLY_TIMESHEET_TEMPLATE.xlsx');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(templatePath);
   const ws = workbook.getWorksheet('Weekly Time Record');
