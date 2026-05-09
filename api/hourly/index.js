@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      const { workerId, date, location, hours, rate } = req.body;
+      const { workerId, date, location, timeIn, timeOut, hours, rate } = req.body;
 
       if (!workerId || !date || !hours || !rate) {
         return res.status(400).json({
@@ -32,6 +32,8 @@ module.exports = async (req, res) => {
         workerId,
         date,
         location: location || '',
+        timeIn: timeIn || '',
+        timeOut: timeOut || '',
         hours,
         rate
       });
