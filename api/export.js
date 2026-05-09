@@ -5,6 +5,10 @@ function toYMD(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function formatDateText(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+}
+
 function getCurrentPayPeriod() {
   const today = new Date();
   today.setHours(12, 0, 0, 0);
@@ -44,7 +48,6 @@ module.exports = async (req, res) => {
       return res.status(404).json({ error: 'Worker not found' });
     }
 
-    // If no period was passed, use the current Wed–Tue pay period
     if (!periodStart || !periodEnd) {
       const currentPeriod = getCurrentPayPeriod();
       periodStart = currentPeriod.periodStart;
@@ -87,12 +90,36 @@ module.exports = async (req, res) => {
 
     // Header fields
     ws.getCell('H6').value = worker.name;
-    ws.getCell('H8').value = new Date(periodEnd + 'T12:00:00');
-    ws.getCell('H8').numFmt = 'mm/dd/yyyy';
+    ws.getCell('H8').value = formatDateText(new Date(periodEnd + 'T12:00:00'));
 
-    // Daily wage reference
-    ws.getCell('F19').value = Number(worker.wage || 0);
-    ws.getCell('F19').numFmt = '"$"#,##0.00';
+    // Use columns like this:
+    // E = daily days worked
+    // F = hourly hours worked
+    // Row 19 = rates
+    ws.getCell('E10').value = 'DAYS';
+    ws.getCell('F10').value = 'HOURS';
+    ws.getCell('G10').value = '';
+    ws.getCell('H10').value = 'TOTAL';
+
+    // Clear old rate row values but keep formatting
+    ws.getCell('E19').value = null;
+    ws.getCell('F19').value = null;
+    ws.getCell('G19').value = null;
+
+    // Daily rate goes under daily column
+    ws.getCell('E19').value = Number(worker.wage || 0);
+    ws.getCell('E19').numFmt = '"$"#,##0.00';
+
+    // If hourly entries exist, put the hourly rate under hourly column.
+    // If multiple rates exist, this uses the first one and notes each rate in the job site text.
+    const firstHourlyRate = hourlyRecords.length > 0
+      ? Number(hourlyRecords[0].rate || 0)
+      : null;
+
+    if (firstHourlyRate !== null) {
+      ws.getCell('F19').value = firstHourlyRate;
+      ws.getCell('F19').numFmt = '"$"#,##0.00';
+    }
 
     const dayNames = [
       'Sunday',
@@ -104,7 +131,6 @@ module.exports = async (req, res) => {
       'Saturday'
     ];
 
-    // Build map by date
     const entriesByDate = {};
 
     dailyRecords.forEach(r => {
@@ -114,27 +140,25 @@ module.exports = async (req, res) => {
         type: 'daily',
         jobSite: r.location || '',
         note: r.note || '',
-        amount: Number(worker.wage || 0),
-        details: ''
+        dailyUnits: 1,
+        hourlyHours: null,
+        hourlyRate: null
       });
     });
 
     hourlyRecords.forEach(e => {
       if (!entriesByDate[e.date]) entriesByDate[e.date] = [];
 
-      const hours = Number(e.hours || 0);
-      const rate = Number(e.rate || 0);
-
       entriesByDate[e.date].push({
         type: 'hourly',
         jobSite: e.location || 'Hourly Entry',
         note: '',
-        amount: hours * rate,
-        details: `${hours}h × $${rate}/hr`
+        dailyUnits: null,
+        hourlyHours: Number(e.hours || 0),
+        hourlyRate: Number(e.rate || 0)
       });
     });
 
-    // Fill rows 11–17, one row per date in the pay period
     for (let i = 0; i < 7; i++) {
       const row = 11 + i;
 
@@ -147,14 +171,20 @@ module.exports = async (req, res) => {
       // Clear old values but keep formatting
       ws.getCell(`B${row}`).value = null; // Day
       ws.getCell(`C${row}`).value = null; // Date
-      ws.getCell(`D${row}`).value = null; // Job Site
-      ws.getCell(`E${row}`).value = null; // Amount
+      ws.getCell(`D${row}`).value = null; // Job site
+      ws.getCell(`E${row}`).value = null; // Daily days
+      ws.getCell(`F${row}`).value = null; // Hourly hours
+      ws.getCell(`G${row}`).value = null;
 
       ws.getCell(`B${row}`).value = dayNames[d.getDay()];
-      ws.getCell(`C${row}`).value = d;
-      ws.getCell(`C${row}`).numFmt = 'm/d/yyyy';
+
+      // Write date as text so Excel does not show #####
+      ws.getCell(`C${row}`).value = formatDateText(d);
 
       if (entries.length === 0) continue;
+
+      const dailyEntries = entries.filter(e => e.type === 'daily');
+      const hourlyEntries = entries.filter(e => e.type === 'hourly');
 
       const jobSiteText = entries.map(entry => {
         let text = entry.jobSite || '';
@@ -163,20 +193,31 @@ module.exports = async (req, res) => {
           text += ` — ${entry.note}`;
         }
 
-        if (entry.type === 'hourly' && entry.details) {
-          text += text ? ` (${entry.details})` : entry.details;
+        if (entry.type === 'hourly') {
+          text += ` (${entry.hourlyHours}h @ $${entry.hourlyRate}/hr)`;
         }
 
         return text;
       }).filter(Boolean).join(' | ');
 
-      const totalForDay = entries.reduce((sum, entry) => {
-        return sum + Number(entry.amount || 0);
-      }, 0);
-
       ws.getCell(`D${row}`).value = jobSiteText;
-      ws.getCell(`E${row}`).value = totalForDay;
-      ws.getCell(`E${row}`).numFmt = '"$"#,##0.00';
+
+      // Daily: put 1 day, not $1000
+      if (dailyEntries.length > 0) {
+        ws.getCell(`E${row}`).value = dailyEntries.length;
+      }
+
+      // Hourly: put hours worked, not total pay
+      if (hourlyEntries.length > 0) {
+        const totalHours = hourlyEntries.reduce((sum, entry) => {
+          return sum + Number(entry.hourlyHours || 0);
+        }, 0);
+
+        ws.getCell(`F${row}`).value = totalHours;
+      }
+
+      // If hourly rates differ, template formulas cannot represent multiple rates in one column.
+      // In that case, the job site text still shows the exact per-entry rate.
     }
 
     const lastName = worker.name.split(' ').pop();
