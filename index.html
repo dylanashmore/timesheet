@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D Ramos Enterprises</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green-dark: #2d3f2f;
+  --green-mid:  #4a6b4d;
+  --green-light: #6b8f6e;
+  --green-pale: #e8f0e8;
+  --white: #ffffff;
+  --gray-bg: #ffffff;
+  --gray-border: #d0d8d0;
+  --gray-text: #555f55;
+  --red: #c0392b;
+}
+
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #ffffff;
+  color: #1a1a1a;
+  min-height: 100vh;
+}
+
+/* ─── PIN SCREEN ─── */
+#pin-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--green-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  transition: opacity .4s, transform .4s;
+}
+#pin-screen.hidden {
+  opacity: 0;
+  transform: scale(1.03);
+  pointer-events: none;
+}
+
+.pin-logo {
+  font-family: Georgia, serif;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: #a8c8aa;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.pin-sub {
+  font-family: Georgia, serif;
+  font-size: 26px;
+  color: #ffffff;
+  margin-bottom: 48px;
+  font-weight: normal;
+}
+
+.pin-label {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #a8c8aa;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.pin-dot {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  border: 2px solid #4a6b4d;
+  transition: all .2s;
+}
+.pin-dot.filled { background: #a8c8aa; border-color: #a8c8aa; }
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pin-key {
+  width: 68px; height: 68px;
+  border-radius: 8px;
+  border: 1px solid #3d5c40;
+  background: #253727;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all .12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pin-key:hover { background: #3a5a3d; }
+.pin-key:active { transform: scale(.93); background: var(--green-mid); }
+.pin-key.del { font-size: 16px; color: #a8c8aa; }
+.pin-key.empty { background: transparent; border: none; cursor: default; }
+
+.pin-error {
+  font-size: 13px;
+  color: #ff9999;
+  font-family: Arial, sans-serif;
+  height: 20px;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* ─── MAIN APP ─── */
+#app { display: none; min-height: 100vh; }
+#app.visible { display: block; }
+
+header {
+  background: var(--green-dark);
+  padding: 0 32px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.h-logo {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  color: #ffffff;
+  letter-spacing: 1px;
+}
+.h-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.h-role {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: #a8c8aa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.btn-lock {
+  background: none;
+  border: 1px solid #4a6b4d;
+  border-radius: 5px;
+  color: #a8c8aa;
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+  transition: all .2s;
+}
+.btn-lock:hover { background: #3a5a3d; color: #fff; }
+
+/* ─── VIEW SWITCHER ─── */
+.view-strip {
+  background: var(--white);
+  border-bottom: 2px solid var(--gray-border);
+  display: flex;
+  padding: 0 32px;
+}
+.view-tab {
+  padding: 14px 24px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--gray-text);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all .15s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.view-tab.active { color: var(--green-dark); border-bottom-color: var(--green-dark); }
+.view-tab:hover:not(.active) { color: var(--green-dark); }
+
+/* ─── CONTENT ─── */
+main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
+
+.page { display: none; }
+.page.active { display: block; }
+
+.pg-eyebrow { display: none; }
+.pg-title {
+  font-family: Georgia, serif;
+  font-size: 26px;
+  font-weight: normal;
+  margin-bottom: 24px;
+  color: var(--green-dark);
+  border-bottom: 1px solid var(--gray-border);
+  padding-bottom: 12px;
+}
+.pg-title em { font-style: normal; }
+
+/* ─── SUBMIT FORM ─── */
+.form-card {
+  background: var(--white);
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  padding: 28px;
+}
+
+.field { margin-bottom: 20px; }
+.field label {
+  display: block;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--gray-text);
+  margin-bottom: 8px;
+}
+
+.date-display {
+  font-family: Georgia, serif;
+  font-size: 22px;
+  color: var(--green-dark);
+}
+.date-sub {
+  font-size: 13px;
+  color: var(--gray-text);
+  font-family: Arial, sans-serif;
+  margin-top: 2px;
+}
+
+.field input[type=text] {
+  width: 100%;
+  border: 1px solid var(--gray-border);
+  border-radius: 5px;
+  background: var(--white);
+  padding: 11px 13px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: #1a1a1a;
+  outline: none;
+  transition: border-color .2s;
+}
+.field input[type=text]:focus { border-color: var(--green-mid); outline: 2px solid #c8ddc8; }
+.field input[type=text]::placeholder { color: #aaa; }
+
+/* ─── EMPLOYEE MULTI-SELECT ─── */
+.emp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.emp-tile {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .18s;
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+.emp-tile:hover { border-color: var(--gold-light); background: #fdf8ee; }
+.emp-tile.on { border-color: var(--gold); background: #fdf8ee; box-shadow: 0 0 0 3px #b8973a22; }
+
+/* ─── EMPLOYEE TILES ─── */
+.emp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 8px;
+}
+.emp-tile {
+  border: 1px solid var(--gray-border);
+  border-radius: 5px;
+  padding: 11px 13px;
+  cursor: pointer;
+  transition: all .15s;
+  background: #f5f8f5;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  user-select: none;
+}
+.emp-tile:hover { border-color: var(--green-mid); background: var(--green-pale); }
+.emp-tile.on { border-color: var(--green-dark); background: var(--green-pale); }
+
+.tile-check {
+  width: 17px; height: 17px;
+  border-radius: 3px;
+  border: 2px solid var(--gray-border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+  font-size: 11px;
+  color: transparent;
+  font-weight: bold;
+}
+.emp-tile.on .tile-check { background: var(--green-dark); border-color: var(--green-dark); color: #fff; }
+.tile-name { font-size: 14px; font-family: Arial, sans-serif; line-height: 1.2; }
+
+.select-all-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+.link-btn {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--green-mid);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.link-btn:hover { color: var(--green-dark); }
+.divider { width: 1px; height: 14px; background: var(--gray-border); }
+
+.submit-btn {
+  margin-top: 24px;
+  width: 100%;
+  padding: 15px;
+  background: var(--green-dark);
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover { background: var(--green-mid); }
+
+/* ─── VIEW PAGE ─── */
+.filter-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-row select {
+  border: 1px solid var(--gray-border);
+  border-radius: 4px;
+  background: var(--white);
+  padding: 9px 12px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  outline: none;
+  cursor: pointer;
+}
+
+.worker-card {
+  background: var(--white);
+  border: 1px solid var(--gray-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.wc-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gray-border);
+  background: var(--green-pale);
+}
+.wc-name {
+  font-family: Georgia, serif;
+  font-size: 18px;
+  color: var(--green-dark);
+}
+.wc-days-count {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: var(--gray-text);
+}
+.wc-wage {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--green-dark);
+}
+.dl-btn {
+  padding: 9px 16px;
+  border-radius: 4px;
+  border: none;
+  background: var(--green-dark);
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background .2s;
+  white-space: nowrap;
+}
+.dl-btn:hover { background: var(--green-mid); }
+
+.wc-days {
+  padding: 14px 20px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.day-chip {
+  background: var(--gray-bg);
+  border: 1px solid var(--gray-border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.day-chip .loc { font-size: 12px; color: var(--gray-text); }
+
+.empty-state { text-align: center; padding: 60px 0; }
+.empty-state .big { font-family: Georgia, serif; font-size: 20px; color: var(--gray-text); margin-bottom: 6px; }
+.empty-state p { font-size: 13px; font-family: Arial, sans-serif; color: #aaa; }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: var(--green-dark);
+  color: #fff;
+  border-radius: 5px;
+  padding: 13px 20px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  z-index: 900;
+  transform: translateY(60px);
+  opacity: 0;
+  transition: all .25s ease;
+  max-width: 280px;
+}
+.toast.show { transform: none; opacity: 1; }
+
+/* ─── MANAGE WORKERS ─── */
+.mw-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--gray-border);
+}
+.mw-row:last-child { border-bottom: none; }
+.mw-row input {
+  flex: 1;
+  border: 1px solid var(--gray-border);
+  border-radius: 4px;
+  background: var(--gray-bg);
+  padding: 9px 12px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: #1a1a1a;
+  outline: none;
+}
+.mw-row input:focus { border-color: var(--green-mid); }
+.mw-name-static { flex: 1; font-size: 15px; font-family: Arial, sans-serif; }
+.mw-wage-static { font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; color: var(--green-dark); width: 90px; }
+.btn-sm {
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--gray-border);
+  background: var(--white);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all .15s;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+.btn-sm:hover { background: var(--green-dark); color: #fff; border-color: var(--green-dark); }
+.btn-sm.danger:hover { background: var(--red); border-color: var(--red); }
+
+.add-worker-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+  padding-top: 20px;
+  border-top: 1px solid var(--gray-border);
+}
+.add-worker-form input {
+  flex: 1;
+  min-width: 140px;
+  border: 1px solid var(--gray-border);
+  border-radius: 4px;
+  background: var(--white);
+  padding: 11px 13px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: #1a1a1a;
+  outline: none;
+}
+.add-worker-form input:focus { border-color: var(--green-mid); }
+
+@media (max-width: 640px) {
+  header { padding: 0 16px; }
+  .view-strip { padding: 0 16px; }
+  main { padding: 20px 14px; }
+  .wc-header { grid-template-columns: 1fr auto; gap: 8px; }
+  .wc-days-count, .wc-wage { display: none; }
+  .form-card { padding: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ PIN SCREEN ═══ -->
+<div id="pin-screen">
+  <div class="pin-logo">D Ramos Enterprises LLC</div>
+  <div class="pin-sub">D Ramos Enterprises</div>
+  <div class="pin-label">Access Code</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="d0"></div>
+    <div class="pin-dot" id="d1"></div>
+    <div class="pin-dot" id="d2"></div>
+    <div class="pin-dot" id="d3"></div>
+  </div>
+  <div class="pin-keypad">
+    <button class="pin-key" onclick="pinPress('1')">1</button>
+    <button class="pin-key" onclick="pinPress('2')">2</button>
+    <button class="pin-key" onclick="pinPress('3')">3</button>
+    <button class="pin-key" onclick="pinPress('4')">4</button>
+    <button class="pin-key" onclick="pinPress('5')">5</button>
+    <button class="pin-key" onclick="pinPress('6')">6</button>
+    <button class="pin-key" onclick="pinPress('7')">7</button>
+    <button class="pin-key" onclick="pinPress('8')">8</button>
+    <button class="pin-key" onclick="pinPress('9')">9</button>
+    <button class="pin-key empty"></button>
+    <button class="pin-key" onclick="pinPress('0')">0</button>
+    <button class="pin-key del" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="app">
+  <header>
+    <div class="h-logo">D Ramos Enterprises</div>
+    <div class="h-right">
+      <span class="h-role" id="h-role-label"></span>
+      <button class="btn-lock" onclick="lockApp()">Lock</button>
+    </div>
+  </header>
+
+  <div class="view-strip" id="view-strip">
+    <button class="view-tab active" id="tab-submit" onclick="switchTab('submit')">Submit Attendance</button>
+    <button class="view-tab" id="tab-view" onclick="switchTab('view')">View Records</button>
+    <button class="view-tab" id="tab-workers" onclick="switchTab('workers')">Manage Workers</button>
+  </div>
+
+  <main>
+    <!-- SUBMIT -->
+    <div class="page active" id="page-submit">
+      <div class="pg-title">Submit Attendance</div>
+      <div class="form-card">
+        <div class="field">
+          <label>Date</label>
+          <div class="date-display" id="today-display"></div>
+          <div class="date-sub" id="today-sub"></div>
+        </div>
+        <div class="field">
+          <label>Job Site / Location</label>
+          <input type="text" id="att-location" placeholder="e.g. Riverside Ave, Site B…">
+        </div>
+        <div class="field">
+          <label>Note (optional)</label>
+          <input type="text" id="att-note" placeholder="Any notes for today…">
+        </div>
+        <div class="field">
+          <label>Employees Present</label>
+          <div class="select-all-row">
+            <button class="link-btn" onclick="selectAll()">Select All</button>
+            <div class="divider"></div>
+            <button class="link-btn" onclick="selectNone()">Clear</button>
+          </div>
+          <div class="emp-grid" id="emp-grid"></div>
+        </div>
+        <button class="submit-btn" onclick="submitAttendance()">
+          <span>✓</span> Submit Attendance
+        </button>
+      </div>
+    </div>
+
+    <!-- VIEW -->
+    <div class="page" id="page-view">
+      <div class="pg-title">Payroll Records</div>
+      <div class="filter-row">
+        <select id="filter-period" onchange="renderView()">
+          <option value="">All Pay Periods</option>
+        </select>
+        <select id="filter-worker" onchange="renderView()">
+          <option value="">All Workers</option>
+        </select>
+      </div>
+      <div class="form-card" id="hourly-form-card" style="margin-bottom:24px;">
+        <div style="font-family:Arial,sans-serif;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:14px;">Add Hourly Entry</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Worker</label>
+            <select id="hourly-worker" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+              <option value="">Select worker...</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Date</label>
+            <input type="date" id="hourly-date" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Hours</label>
+            <input type="number" id="hourly-hours" placeholder="e.g. 6" min="0" step="0.5" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <div>
+            <label style="display:block;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:var(--gray-text);margin-bottom:6px;">Hourly Rate ($)</label>
+            <input type="number" id="hourly-rate" placeholder="e.g. 18" min="0" step="0.01" style="width:100%;border:1px solid var(--gray-border);border-radius:4px;background:var(--white);padding:10px 12px;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;outline:none;">
+          </div>
+          <button class="btn-sm" onclick="submitHourlyEntry()" style="padding:11px 18px;background:var(--green-dark);color:#fff;border-color:var(--green-dark);white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+      <div id="view-list"></div>
+    </div>
+
+    <!-- WORKERS -->
+    <div class="page" id="page-workers">
+      <div class="pg-title">Manage Workers</div>
+      <div class="form-card">
+        <div id="worker-list"></div>
+        <div class="add-worker-form" id="add-form">
+          <input type="text" id="new-name" placeholder="Full name">
+          <input type="number" id="new-wage" placeholder="Daily wage ($)" min="0" step="0.01">
+          <button class="btn-sm" onclick="addWorker()" style="padding:12px 20px;">+ Add Worker</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+const API = ''; // empty = same origin (server.js serves this file)
+
+const PINS = {
+  '1234': { role: 'Boss',   canSubmit: true,  canView: true,  canManage: true  },
+  '5678': { role: 'Viewer', canSubmit: false, canView: true,  canManage: false },
+};
+
+let workers     = [];
+let records     = [];
+let currentUser = null;
+
+// ═══════════════════════════════════════
+// API HELPERS
+// ═══════════════════════════════════════
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+const GET    = path          => api('GET',    path);
+const POST   = (path, body)  => api('POST',   path, body);
+const PATCH  = (path, body)  => api('PATCH',  path, body);
+const DELETE = path          => api('DELETE', path);
+
+// ═══════════════════════════════════════
+// PIN
+// ═══════════════════════════════════════
+let pinBuffer = '';
+
+function pinPress(d) {
+  if (pinBuffer.length >= 4) return;
+  pinBuffer += d;
+  updateDots();
+  if (pinBuffer.length === 4) setTimeout(checkPin, 120);
+}
+function pinDel() {
+  pinBuffer = pinBuffer.slice(0, -1);
+  updateDots();
+  document.getElementById('pin-error').textContent = '';
+}
+function updateDots() {
+  for (let i = 0; i < 4; i++)
+    document.getElementById('d' + i).classList.toggle('filled', i < pinBuffer.length);
+}
+async function checkPin() {
+  const user = PINS[pinBuffer];
+  if (user) {
+    currentUser = { ...user };
+    document.getElementById('pin-screen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    await initApp();
+  } else {
+    document.getElementById('pin-error').textContent = 'Incorrect PIN';
+    pinBuffer = ''; updateDots();
+    const ps = document.getElementById('pin-screen');
+    ps.style.animation = 'none'; ps.offsetHeight;
+    ps.style.animation = 'shake .4s ease';
+  }
+}
+function lockApp() {
+  pinBuffer = ''; updateDots();
+  currentUser = null;
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('pin-screen').classList.remove('hidden');
+}
+
+const style = document.createElement('style');
+style.textContent = `@keyframes shake {
+  0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)}
+}`;
+document.head.appendChild(style);
+
+// ═══════════════════════════════════════
+// APP INIT
+// ═══════════════════════════════════════
+async function initApp() {
+  document.getElementById('h-role-label').textContent = currentUser.role;
+  document.getElementById('tab-submit').style.display  = currentUser.canSubmit  ? '' : 'none';
+  document.getElementById('tab-workers').style.display = currentUser.canManage  ? '' : 'none';
+
+  setTodayDisplay();
+
+  try {
+    [workers, records, hourlyEntries] = await Promise.all([
+      GET('/api/workers'),
+      GET('/api/records'),
+      GET('/api/hourly'),
+    ]);
+  } catch (e) {
+    toast('Could not connect to server: ' + e.message);
+    workers = []; records = []; hourlyEntries = [];
+  }
+
+  buildEmpGrid();
+  populateFilters();
+  renderView();
+  renderWorkerList();
+
+  if (!currentUser.canSubmit && currentUser.canView) switchTab('view');
+  else switchTab('submit');
+}
+
+// ═══════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════
+function setTodayDisplay() {
+  const now = new Date();
+  const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('today-display').textContent = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+  document.getElementById('today-sub').textContent = days[now.getDay()];
+}
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDate(ds) {
+  const [y,m,d] = ds.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m-1]} ${+d}, ${y}`;
+}
+
+// ═══════════════════════════════════════
+// PAY PERIOD HELPERS  (Wed–Tue)
+// ═══════════════════════════════════════
+function parseLocalDate(ds) { return new Date(ds + 'T12:00:00'); }
+function toYMD(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+function getPayPeriod(ds) {
+  const d = parseLocalDate(ds);
+  const day = d.getDay(); // Sun=0 Mon=1 Tue=2 Wed=3
+  const daysSinceWednesday = (day - 3 + 7) % 7;
+  const start = addDays(d, -daysSinceWednesday);
+  const end   = addDays(start, 6);
+  return { start: toYMD(start), end: toYMD(end), key: `${toYMD(start)}|${toYMD(end)}` };
+}
+function payPeriodLabel(key) {
+  const [start, end] = key.split('|');
+  return `${formatDate(start)} – ${formatDate(end)}`;
+}
+function recordInPeriod(record, periodKey) {
+  if (!periodKey) return true;
+  const [start, end] = periodKey.split('|');
+  return record.date >= start && record.date <= end;
+}
+
+// ═══════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════
+function switchTab(t) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.view-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + t).classList.add('active');
+  const tab = document.getElementById('tab-' + t);
+  if (tab) tab.classList.add('active');
+  if (t === 'view')    { populateFilters(); renderView(); }
+  if (t === 'workers') renderWorkerList();
+}
+
+// ═══════════════════════════════════════
+// SUBMIT PAGE
+// ═══════════════════════════════════════
+let selected = new Set();
+
+function buildEmpGrid() {
+  const g = document.getElementById('emp-grid');
+  g.innerHTML = '';
+  workers.forEach(w => {
+    const div = document.createElement('div');
+    div.className = 'emp-tile' + (selected.has(w._id) ? ' on' : '');
+    div.dataset.id = w._id;
+    div.innerHTML = `<div class="tile-check">✓</div><div class="tile-name">${w.name}</div>`;
+    div.onclick = () => toggleEmp(w._id, div);
+    g.appendChild(div);
+  });
+}
+function toggleEmp(id, el) {
+  if (selected.has(id)) { selected.delete(id); el.classList.remove('on'); }
+  else { selected.add(id); el.classList.add('on'); }
+}
+function selectAll()  { workers.forEach(w => selected.add(w._id)); buildEmpGrid(); }
+function selectNone() { selected.clear(); buildEmpGrid(); }
+
+async function submitAttendance() {
+  const loc  = document.getElementById('att-location').value.trim();
+  const note = document.getElementById('att-note').value.trim();
+  if (!loc)            return toast('Please enter a job site / location.');
+  if (selected.size === 0) return toast('Please select at least one employee.');
+
+  const today  = todayStr();
+  const exists = records.find(r => r.date === today && r.location === loc);
+  if (exists && !confirm('Attendance for today at this location has already been submitted. Overwrite it?')) return;
+
+  try {
+    const saved = await POST('/api/records', { date: today, location: loc, note, workerIds: [...selected] });
+    records = records.filter(r => !(r.date === today && r.location === loc));
+    records.push(saved);
+    toast('✓ Attendance submitted for ' + selected.size + ' employee' + (selected.size > 1 ? 's' : '') + '!', true);
+    document.getElementById('att-location').value = '';
+    document.getElementById('att-note').value = '';
+    selectNone();
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+// HOURLY ENTRIES
+// ═══════════════════════════════════════
+let hourlyEntries = [];
+
+function buildHourlyWorkerSelect() {
+  const sel = document.getElementById('hourly-worker');
+  if (!sel) return;
+  const val = sel.value;
+  sel.innerHTML = '<option value="">Select worker...</option>';
+  workers.forEach(w => {
+    const o = document.createElement('option');
+    o.value = w._id; o.textContent = w.name;
+    sel.appendChild(o);
+  });
+  if (val) sel.value = val;
+}
+
+async function submitHourlyEntry() {
+  const workerId = document.getElementById('hourly-worker').value;
+  const date     = document.getElementById('hourly-date').value;
+  const hours    = parseFloat(document.getElementById('hourly-hours').value);
+  const rate     = parseFloat(document.getElementById('hourly-rate').value);
+  if (!workerId) return toast('Select a worker.');
+  if (!date)     return toast('Enter a date.');
+  if (isNaN(hours) || hours <= 0) return toast('Enter valid hours.');
+  if (isNaN(rate)  || rate  <= 0) return toast('Enter a valid hourly rate.');
+  try {
+    const entry = await POST('/api/hourly', { workerId, date, hours, rate });
+    hourlyEntries.push(entry);
+    document.getElementById('hourly-hours').value = '';
+    document.getElementById('hourly-rate').value  = '';
+    document.getElementById('hourly-date').value  = '';
+    document.getElementById('hourly-worker').value = '';
+    populateFilters();
+    renderView();
+    toast('✓ Hourly entry added.', true);
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function deleteHourlyEntry(id) {
+  if (!confirm('Remove this hourly entry?')) return;
+  try {
+    await DELETE('/api/hourly/' + id);
+    hourlyEntries = hourlyEntries.filter(e => e._id !== id);
+    renderView();
+    toast('Entry removed.');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+// VIEW PAGE
+// ═══════════════════════════════════════
+function populateFilters() {
+  // Combine dates from both records and hourly entries for pay period list
+  const allDates = [
+    ...records.map(r => r.date),
+    ...hourlyEntries.map(e => e.date)
+  ];
+  const periods = [...new Set(allDates.map(d => getPayPeriod(d).key))].sort().reverse();
+
+  const pSel = document.getElementById('filter-period');
+  const pVal = pSel ? pSel.value : '';
+  if (pSel) {
+    pSel.innerHTML = '<option value="">All Pay Periods</option>';
+    periods.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p; o.textContent = payPeriodLabel(p);
+      pSel.appendChild(o);
+    });
+    if (pVal) pSel.value = pVal;
+  }
+
+  const wSel = document.getElementById('filter-worker');
+  const wVal = wSel ? wSel.value : '';
+  if (wSel) {
+    wSel.innerHTML = '<option value="">All Workers</option>';
+    workers.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w._id; o.textContent = w.name;
+      wSel.appendChild(o);
+    });
+    if (wVal) wSel.value = wVal;
+  }
+
+  buildHourlyWorkerSelect();
+}
+
+function renderView() {
+  const periodFilter = document.getElementById('filter-period') ? document.getElementById('filter-period').value : '';
+  const wFilter      = document.getElementById('filter-worker')  ? document.getElementById('filter-worker').value  : '';
+  const list         = document.getElementById('view-list');
+
+  let filteredRecords = records;
+  let filteredHourly  = hourlyEntries;
+  if (periodFilter) {
+    filteredRecords = filteredRecords.filter(r => recordInPeriod(r, periodFilter));
+    filteredHourly  = filteredHourly.filter(e => recordInPeriod(e, periodFilter));
+  }
+
+  let displayWorkers = workers;
+  if (wFilter) displayWorkers = workers.filter(w => w._id === wFilter);
+
+  const cards = displayWorkers.map(w => {
+    // Daily entries for this worker
+    const dailyDays = filteredRecords
+      .filter(r => r.workerIds.includes(w._id))
+      .map(r => ({ date: r.date, type: 'daily', location: r.location, note: r.note, amount: w.wage, _id: r._id }));
+
+    // Hourly entries for this worker
+    const hourlyDays = filteredHourly
+      .filter(e => e.workerId === w._id)
+      .map(e => ({ date: e.date, type: 'hourly', hours: e.hours, rate: e.rate, amount: e.hours * e.rate, _id: e._id }));
+
+    // Merge and sort by date
+    const allDays = [...dailyDays, ...hourlyDays].sort((a, b) => a.date.localeCompare(b.date));
+    return { worker: w, days: allDays };
+  }).filter(x => x.days.length > 0);
+
+  if (cards.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="big">No records yet</div><p>Submit attendance or add hourly entries to see them here.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = cards.map(({ worker: w, days }) => {
+    const totalEarned = days.reduce((sum, d) => sum + d.amount, 0);
+    const daysHtml = days.map(d => {
+      if (d.type === 'daily') {
+        return `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${d.amount.toLocaleString()}</strong></span></div>`;
+      } else {
+        return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.hours}h × $${d.rate}/hr = <strong>$${d.amount.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
+      }
+    }).join('');
+    return `
+    <div class="worker-card">
+      <div class="wc-header">
+        <div class="wc-name">${w.name}</div>
+        <div class="wc-days-count">${days.length} entr${days.length !== 1 ? 'ies' : 'y'}</div>
+        <div class="wc-wage">Total $${totalEarned.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${periodFilter}')">⬇ Download XLSX</button>
+      </div>
+      <div class="wc-days">${daysHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+// XLSX EXPORT — server-side via ExcelJS
+// ═══════════════════════════════════════
+async function downloadXLSX(workerId, periodKey) {
+  const w = workers.find(x => x._id === workerId);
+  if (!w) return;
+
+  const [periodStart, periodEnd] = periodKey ? periodKey.split('|') : ['', ''];
+
+  const params = new URLSearchParams({ workerId });
+  if (periodStart) params.set('periodStart', periodStart);
+  if (periodEnd)   params.set('periodEnd',   periodEnd);
+
+  toast('Generating timesheet...');
+  try {
+    const res = await fetch(`/api/export/${workerId}?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const lastName   = w.name.split(' ').pop();
+    const safePeriod = periodStart && periodEnd ? `${periodStart}_to_${periodEnd}` : 'export';
+    a.href     = url;
+    a.download = `${lastName}_Timesheet_${safePeriod}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('⬇ Downloaded timesheet for ' + w.name, true);
+  } catch (e) {
+    toast('Error: ' + e.message);
+    console.error(e);
+  }
+}
+// ═══════════════════════════════════════
+// MANAGE WORKERS
+// ═══════════════════════════════════════
+function renderWorkerList() {
+  const ul = document.getElementById('worker-list');
+  if (workers.length === 0) {
+    ul.innerHTML = '<p style="color:var(--gray-text);font-size:14px;padding:16px 0;">No workers yet. Add one below.</p>';
+    return;
+  }
+  ul.innerHTML = workers.map(w => `
+    <div class="mw-row">
+      <div class="mw-name-static">${w.name}</div>
+      <div class="mw-wage-static">$${w.wage}/day</div>
+      <input type="number" placeholder="New wage" id="wage-${w._id}" style="max-width:130px;" min="0" step="0.01">
+      <button class="btn-sm" onclick="updateWage('${w._id}')">Update</button>
+      <button class="btn-sm danger" onclick="removeWorker('${w._id}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+async function updateWage(id) {
+  const input = document.getElementById('wage-' + id);
+  const val   = parseFloat(input.value);
+  if (isNaN(val) || val < 0) return toast('Enter a valid wage.');
+  try {
+    const updated = await PATCH('/api/workers/' + id, { wage: val });
+    workers = workers.map(w => w._id === id ? updated : w);
+    renderWorkerList(); buildEmpGrid();
+    toast('✓ Wage updated.', true);
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function removeWorker(id) {
+  const w = workers.find(x => x._id === id);
+  if (!confirm(`Remove ${w?.name}? Their attendance history will remain.`)) return;
+  try {
+    await DELETE('/api/workers/' + id);
+    workers = workers.filter(x => x._id !== id);
+    renderWorkerList(); buildEmpGrid(); populateFilters();
+    toast('Worker removed.');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function addWorker() {
+  const name = document.getElementById('new-name').value.trim();
+  const wage = parseFloat(document.getElementById('new-wage').value);
+  if (!name)              return toast('Enter a name.');
+  if (isNaN(wage) || wage < 0) return toast('Enter a valid daily wage.');
+  try {
+    const w = await POST('/api/workers', { name, wage });
+    workers.push(w);
+    document.getElementById('new-name').value = '';
+    document.getElementById('new-wage').value = '';
+    renderWorkerList(); buildEmpGrid(); populateFilters();
+    toast('✓ ' + name + ' added.', true);
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+// ═══════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════
+let toastTimer;
+function toast(msg, ok) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = ok ? 'var(--green-dark)' : 'var(--red)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ═══════════════════════════════════════
+// KEYBOARD PIN SUPPORT
+// ═══════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (!currentUser) {
+    if (e.key >= '0' && e.key <= '9') pinPress(e.key);
+    if (e.key === 'Backspace') pinDel();
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "dramos-attendance",
+  "version": "1.0.0",
+  "description": "D Ramos Enterprises attendance tracker",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "mongoose": "^8.3.4"
+  }
+}
