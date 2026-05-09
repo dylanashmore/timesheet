@@ -14,7 +14,31 @@ async function connectDB() {
 
 const workerSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
+
+  // Daily wage for normal job-site work
   wage: { type: Number, required: true, min: 0 },
+
+  // daily = only job-site daily worker
+  // hourly = only hourly worker
+  // both = can be job-site daily OR hourly
+  payType: {
+    type: String,
+    enum: ['daily', 'hourly', 'both'],
+    default: 'daily'
+  },
+
+  // Hourly rate for hourly/both workers
+  hourlyRate: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  // Should this worker show on the normal Submit Attendance page?
+  showOnAttendance: {
+    type: Boolean,
+    default: true
+  }
 }, { timestamps: true });
 
 const recordSchema = new mongoose.Schema({
