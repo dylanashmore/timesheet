@@ -184,20 +184,14 @@ hourlyRecords.forEach(entry => {
       ws.getCell(`D${row}`).value = formatDateText(date);
 
       if (entries.length === 0) continue;
-
-      const locationText = entries.map(entry => {
-        let text = entry.location || '';
-
-        if (entry.note) {
-          text += ` — ${entry.note}`;
-        }
-
-        return text;
-      }).filter(Boolean).join(' | ');
-
-      const dayTotal = entries.reduce((sum, entry) => {
-        return sum + Number(entry.amount || 0);
-      }, 0);
+      const locationText = entries
+        .map(entry => entry.location || '')
+        .filter(Boolean)
+        .join(' | ');
+      
+            const dayTotal = entries.reduce((sum, entry) => {
+              return sum + Number(entry.amount || 0);
+            }, 0);
 
       const hourlyEntriesForDay = entries.filter(entry => entry.type === 'hourly');
 
