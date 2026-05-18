@@ -123,6 +123,7 @@ body {
 /* ─── MAIN APP ─── */
 #app { display: none; min-height: 100vh; }
 #app.visible { display: block; }
+#att-date:focus { border-color: var(--green-mid); outline: 2px solid #c8ddc8; }
 
 header {
   background: var(--green-dark);
@@ -667,6 +668,8 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
   .add-worker-form button {
     width: 100%;
   }
+
+  
 }
 </style>
 </head>
@@ -723,7 +726,7 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
       <div class="form-card">
         <div class="field">
           <label>Date</label>
-          <input type="date" id="att-date">
+          <input type="date" id="att-date" style="font-family:Arial,sans-serif;font-size:15px;color:var(--green-dark);border:1px solid var(--gray-border);border-radius:5px;padding:11px 13px;outline:none;width:100%;background:var(--white);cursor:pointer;">
           <div class="date-sub" id="today-sub"></div>
         </div>
         <div class="field">
