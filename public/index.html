@@ -723,7 +723,7 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
       <div class="form-card">
         <div class="field">
           <label>Date</label>
-          <div class="date-display" id="today-display"></div>
+          <input type="date" id="att-date">
           <div class="date-sub" id="today-sub"></div>
         </div>
         <div class="field">
@@ -925,11 +925,22 @@ async function initApp() {
 // DATE HELPERS
 // ═══════════════════════════════════════
 function setTodayDisplay() {
-  const now = new Date();
-  const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('today-display').textContent = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
-  document.getElementById('today-sub').textContent = days[now.getDay()];
+  const input = document.getElementById('att-date');
+  const sub = document.getElementById('today-sub');
+
+  const today = todayStr();
+  input.value = today;
+
+  const now = new Date(today + 'T12:00:00');
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  sub.textContent = days[now.getDay()];
+
+  input.onchange = () => {
+    if (!input.value) input.value = todayStr();
+
+    const selectedDate = new Date(input.value + 'T12:00:00');
+    sub.textContent = days[selectedDate.getDay()];
+  };
 }
 function todayStr() {
   const d = new Date();
@@ -1023,13 +1034,14 @@ async function submitAttendance() {
   if (!loc)            return toast('Please enter a job site / location.');
   if (selected.size === 0) return toast('Please select at least one employee.');
 
-  const today  = todayStr();
-  const exists = records.find(r => r.date === today && r.location === loc);
-  if (exists && !confirm('Attendance for today at this location has already been submitted. Overwrite it?')) return;
+  const selectedDate = document.getElementById('att-date').value || todayStr();
+  
+  const exists = records.find(r => r.date === selectedDate && r.location === loc);
+  if (exists && !confirm('Attendance for this date at this location has already been submitted. Overwrite it?')) return;
 
   try {
-    const saved = await POST('/api/records', { date: today, location: loc, note, workerIds: [...selected] });
-    records = records.filter(r => !(r.date === today && r.location === loc));
+    const saved = await POST('/api/records', { date: selectedDate, location: loc, note, workerIds: [...selected] });
+    records = records.filter(r => !(r.date === selectedDate && r.location === loc));
     records.push(saved);
     toast('✓ Attendance submitted for ' + selected.size + ' employee' + (selected.size > 1 ? 's' : '') + '!', true);
     document.getElementById('att-location').value = '';
