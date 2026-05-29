@@ -1208,15 +1208,24 @@ function populateFilters() {
 
   const pSel = document.getElementById('filter-period');
   const pVal = pSel ? pSel.value : '';
-  if (pSel) {
-    pSel.innerHTML = '<option value="">All Pay Periods</option>';
-    periods.forEach(p => {
-      const o = document.createElement('option');
-      o.value = p; o.textContent = payPeriodLabel(p);
-      pSel.appendChild(o);
-    });
-    if (pVal) pSel.value = pVal;
+if (pSel) {
+  pSel.innerHTML = '';
+
+  periods.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p;
+    o.textContent = payPeriodLabel(p);
+    pSel.appendChild(o);
+  });
+
+  const stillValidPeriod = periods.includes(pVal);
+
+  if (stillValidPeriod) {
+    pSel.value = pVal;
+  } else if (periods.length > 0) {
+    pSel.value = periods[0];
   }
+}
 
   const wSel = document.getElementById('filter-worker');
   const wVal = wSel ? wSel.value : '';
@@ -1351,7 +1360,8 @@ if (periodEnd) {
 const safeName = w.name
   .trim()
   .replace(/\s+/g, ' ')
-  .replace(/[\\/:*?"<>|]/g, '');
+  .replace(/[\\/:*?"<>|]/g, '')
+  .toUpperCase();
 
 a.href = url;
 a.download = `${safeName} ${formatPaydayForFileName(payday)}.xlsx`;
