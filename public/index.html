@@ -1159,6 +1159,33 @@ async function deleteHourlyEntry(id) {
   } catch (e) { toast('Error: ' + e.message); }
 }
 
+async function deleteWorkerFromRecord(recordId, workerId) {
+  if (!confirm('Remove this worker from this date?')) return;
+
+  try {
+    await DELETE(`/api/records/${recordId}?workerId=${workerId}`);
+
+    records = records
+      .map(r => {
+        if (r._id !== recordId) return r;
+
+        return {
+          ...r,
+          workerIds: r.workerIds.filter(id => id !== workerId)
+        };
+      })
+      .filter(r => r.workerIds.length > 0);
+
+    populateFilters();
+    renderView();
+
+    toast('Worker removed from this date.');
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+  
 // ═══════════════════════════════════════
 // VIEW PAGE
 // ═══════════════════════════════════════
@@ -1168,7 +1195,16 @@ function populateFilters() {
     ...records.map(r => r.date),
     ...hourlyEntries.map(e => e.date)
   ];
-  const periods = [...new Set(allDates.map(d => getPayPeriod(d).key))].sort().reverse();
+  const periods = [...new Set(allDates.map(d => getPayPeriod(d).key))]
+    .filter(key => {
+      const [, end] = key.split('|');
+      return end < todayStr();
+    })
+    .sort((a, b) => {
+      const [, endA] = a.split('|');
+      const [, endB] = b.split('|');
+      return endB.localeCompare(endA);
+    });
 
   const pSel = document.getElementById('filter-period');
   const pVal = pSel ? pSel.value : '';
@@ -1254,8 +1290,12 @@ function renderView() {
 
     const daysHtml = days.map(d => {
       if (d.type === 'daily') {
-        return `<div class="day-chip">${formatDate(d.date)}<span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span></div>`;
-      }
+  return `<div class="day-chip">
+    ${formatDate(d.date)}
+    <span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+    <span onclick="deleteWorkerFromRecord('${d._id}', '${w._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span>
+  </div>`;
+}
 
       return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? d.location + ' · ' : ''}${d.timeIn || ''}${d.timeOut ? '–' + d.timeOut : ''} · ${d.hours} hrs · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
     }).join('');
@@ -1294,10 +1334,27 @@ async function downloadXLSX(workerId, periodKey) {
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    const lastName   = w.name.split(' ').pop();
-    const safePeriod = periodStart && periodEnd ? `${periodStart}_to_${periodEnd}` : 'export';
-    a.href     = url;
-    a.download = `${lastName}_Timesheet_${safePeriod}.xlsx`;
+    function formatPaydayForFileName(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${mm}.${dd}.${yy}`;
+}
+
+let payday = todayStr();
+
+if (periodEnd) {
+  payday = toYMD(addDays(parseLocalDate(periodEnd), 3));
+}
+
+const safeName = w.name
+  .trim()
+  .replace(/\s+/g, ' ')
+  .replace(/[\\/:*?"<>|]/g, '');
+
+a.href = url;
+a.download = `${safeName} ${formatPaydayForFileName(payday)}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     toast('⬇ Downloaded timesheet for ' + w.name, true);
