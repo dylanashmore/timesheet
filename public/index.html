@@ -1195,11 +1195,8 @@ function populateFilters() {
     ...records.map(r => r.date),
     ...hourlyEntries.map(e => e.date)
   ];
+
   const periods = [...new Set(allDates.map(d => getPayPeriod(d).key))]
-    .filter(key => {
-      const [, end] = key.split('|');
-      return end < todayStr();
-    })
     .sort((a, b) => {
       const [, endA] = a.split('|');
       const [, endB] = b.split('|');
@@ -1208,24 +1205,35 @@ function populateFilters() {
 
   const pSel = document.getElementById('filter-period');
   const pVal = pSel ? pSel.value : '';
-if (pSel) {
-  pSel.innerHTML = '';
 
-  periods.forEach(p => {
-    const o = document.createElement('option');
-    o.value = p;
-    o.textContent = payPeriodLabel(p);
-    pSel.appendChild(o);
-  });
+  if (pSel) {
+    pSel.innerHTML = '';
 
-  const stillValidPeriod = periods.includes(pVal);
+    periods.forEach(p => {
+      const [, end] = p.split('|');
+      const isCompleted = end < todayStr();
 
-  if (stillValidPeriod) {
-    pSel.value = pVal;
-  } else if (periods.length > 0) {
-    pSel.value = periods[0];
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = `${payPeriodLabel(p)}${isCompleted ? '' : ' (In Progress)'}`;
+      pSel.appendChild(o);
+    });
+
+    const mostRecentCompletedPeriod = periods.find(p => {
+      const [, end] = p.split('|');
+      return end < todayStr();
+    });
+
+    const stillValidPeriod = periods.includes(pVal);
+
+    if (stillValidPeriod) {
+      pSel.value = pVal;
+    } else if (mostRecentCompletedPeriod) {
+      pSel.value = mostRecentCompletedPeriod;
+    } else if (periods.length > 0) {
+      pSel.value = periods[0];
+    }
   }
-}
 
   const wSel = document.getElementById('filter-worker');
   const wVal = wSel ? wSel.value : '';
@@ -1233,7 +1241,8 @@ if (pSel) {
     wSel.innerHTML = '<option value="">All Workers</option>';
     workers.forEach(w => {
       const o = document.createElement('option');
-      o.value = w._id; o.textContent = w.name;
+      o.value = w._id;
+      o.textContent = w.name;
       wSel.appendChild(o);
     });
     if (wVal) wSel.value = wVal;
