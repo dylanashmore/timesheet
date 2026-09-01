@@ -669,7 +669,219 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
     width: 100%;
   }
 
-  
+
+}
+
+/* ─── ALREADY-LOGGED BANNER ─── */
+.existing-banner {
+  display: none;
+  background: var(--green-pale);
+  border: 1px solid var(--green-light);
+  border-left: 4px solid var(--green-dark);
+  border-radius: 5px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--green-dark);
+  line-height: 1.5;
+}
+.existing-banner.show { display: block; }
+.existing-banner .eb-names {
+  display: block;
+  margin-top: 4px;
+  color: var(--gray-text);
+  font-size: 12px;
+}
+
+/* ─── REVIEW DIALOG ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 30, 21, .55);
+  z-index: 800;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--white);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+}
+.modal-head {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--gray-border);
+}
+.modal-title {
+  font-family: Georgia, serif;
+  font-size: 21px;
+  color: var(--green-dark);
+  margin-bottom: 4px;
+}
+/* The day being logged, spelled out — the one fact worth re-reading */
+.modal-date {
+  font-family: Georgia, serif;
+  font-size: 17px;
+  color: #1a1a1a;
+  margin: 6px 0 3px;
+}
+.modal-sub {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--gray-text);
+}
+.modal-body {
+  padding: 8px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-foot {
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--gray-border);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* One worker awaiting a full-day / half-day call */
+.rw-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gray-border);
+}
+.rw-row:last-child { border-bottom: none; }
+
+.rw-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.rw-name {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  color: #1a1a1a;
+  flex: 1;
+}
+.rw-pay {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--green-dark);
+  white-space: nowrap;
+}
+
+.daytype {
+  display: flex;
+  border: 1px solid var(--gray-border);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.daytype button {
+  flex: 1;
+  border: none;
+  background: var(--white);
+  padding: 11px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--gray-text);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.daytype button + button { border-left: 1px solid var(--gray-border); }
+.daytype button:hover { background: var(--green-pale); }
+.daytype button.on {
+  background: var(--green-dark);
+  color: #fff;
+  font-weight: bold;
+}
+
+.rw-note {
+  width: 100%;
+  border: 1px solid var(--gray-border);
+  border-radius: 4px;
+  padding: 9px 11px;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  outline: none;
+  background: var(--white);
+}
+.rw-note:focus { border-color: var(--green-mid); outline: 2px solid #c8ddc8; }
+.rw-note::placeholder { color: #aaa; }
+
+.modal-total {
+  flex: 1;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--gray-text);
+}
+.modal-total strong {
+  display: block;
+  font-family: Georgia, serif;
+  font-size: 19px;
+  color: var(--green-dark);
+}
+
+.btn-back {
+  background: var(--white);
+  border: 1px solid var(--gray-border);
+  border-radius: 5px;
+  padding: 12px 18px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  color: var(--gray-text);
+  cursor: pointer;
+}
+.btn-back:hover { border-color: var(--green-mid); color: var(--green-dark); }
+
+.btn-confirm {
+  background: var(--green-dark);
+  border: 1px solid var(--green-dark);
+  border-radius: 5px;
+  padding: 12px 22px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  cursor: pointer;
+}
+.btn-confirm:hover { background: var(--green-mid); }
+.btn-confirm:disabled { opacity: .6; cursor: default; }
+
+/* Half days need to be obvious at a glance on the records page */
+.half-badge {
+  display: inline-block;
+  background: var(--green-pale);
+  border: 1px solid var(--green-light);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  color: var(--green-dark);
+  margin-left: 4px;
+}
+
+@media (max-width: 640px) {
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: none;
+    max-height: 94vh;
+    border-radius: 6px 6px 0 0;
+  }
+  .modal-head, .modal-body, .modal-foot { padding-left: 16px; padding-right: 16px; }
+  .modal-foot { flex-wrap: wrap; }
+  .modal-total { flex-basis: 100%; margin-bottom: 4px; }
+  .btn-back, .btn-confirm { flex: 1; }
 }
 </style>
 </head>
@@ -724,6 +936,7 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
     <div class="page active" id="page-submit">
       <div class="pg-title">Submit Attendance</div>
       <div class="form-card">
+        <div class="existing-banner" id="existing-banner"></div>
         <div class="field">
           <label>Date</label>
           <input type="date" id="att-date" style="font-family:Arial,sans-serif;font-size:15px;color:var(--green-dark);border:1px solid var(--gray-border);border-radius:5px;padding:11px 13px;outline:none;width:100%;background:var(--white);cursor:pointer;">
@@ -734,7 +947,7 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
           <input type="text" id="att-location" placeholder="e.g. Riverside Ave, Site B…">
         </div>
         <div class="field">
-          <label>Note (optional)</label>
+          <label>Note for the whole day (optional)</label>
           <input type="text" id="att-note" placeholder="Any notes for today…">
         </div>
         <div class="field">
@@ -746,8 +959,8 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
           </div>
           <div class="emp-grid" id="emp-grid"></div>
         </div>
-        <button class="submit-btn" onclick="submitAttendance()">
-          <span>✓</span> Submit Attendance
+        <button class="submit-btn" id="submit-attendance-btn" onclick="openReview()">
+          <span>✓</span> Next: Check Hours &amp; Submit
         </button>
       </div>
     </div>
@@ -808,6 +1021,26 @@ main { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
       </div>
     </div>
   </main>
+</div>
+
+<!-- ═══ REVIEW DIALOG — half days, per-worker comments, and a last look ═══ -->
+<div class="modal-overlay" id="review-overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
+    <div class="modal-head">
+      <div class="modal-title" id="review-title">Check Before Submitting</div>
+      <div class="modal-date" id="review-date"></div>
+      <div class="modal-sub" id="review-sub"></div>
+    </div>
+    <div class="modal-body" id="review-body"></div>
+    <div class="modal-foot">
+      <div class="modal-total">
+        Total for this day
+        <strong id="review-total">$0.00</strong>
+      </div>
+      <button class="btn-back" onclick="closeReview()">Go Back</button>
+      <button class="btn-confirm" id="review-confirm" onclick="confirmSubmit()">Submit</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -920,6 +1153,11 @@ async function initApp() {
   renderView();
   renderWorkerList();
 
+  // Typing a job site that already has a crew logged should say so immediately.
+  const locInput = document.getElementById('att-location');
+  locInput.oninput = refreshExistingBanner;
+  refreshExistingBanner();
+
   if (!currentUser.canSubmit && currentUser.canView) switchTab('view');
   else switchTab('submit');
 }
@@ -927,6 +1165,8 @@ async function initApp() {
 // ═══════════════════════════════════════
 // DATE HELPERS
 // ═══════════════════════════════════════
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
 function setTodayDisplay() {
   const input = document.getElementById('att-date');
   const sub = document.getElementById('today-sub');
@@ -934,20 +1174,37 @@ function setTodayDisplay() {
   const today = todayStr();
   input.value = today;
 
-  const now = new Date(today + 'T12:00:00');
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  sub.textContent = days[now.getDay()];
+  // Stops the date picker from even offering a future day. The check in
+  // openReview() still runs, because typed dates can slip past `max`.
+  input.max = today;
+
+  const hourlyDate = document.getElementById('hourly-date');
+  if (hourlyDate) hourlyDate.max = today;
+
+  sub.textContent = DAY_NAMES[new Date(today + 'T12:00:00').getDay()];
 
   input.onchange = () => {
     if (!input.value) input.value = todayStr();
 
-    const selectedDate = new Date(input.value + 'T12:00:00');
-    sub.textContent = days[selectedDate.getDay()];
+    if (input.value > todayStr()) {
+      toast("That day hasn't happened yet — pick today or a day already past.");
+      input.value = todayStr();
+    }
+
+    sub.textContent = DAY_NAMES[new Date(input.value + 'T12:00:00').getDay()];
+    refreshExistingBanner();
   };
 }
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// Months spelled out. "8/30" invites a misread; "August 30, 2026" doesn't.
+function formatDateLong(ds) {
+  const [y, m, d] = ds.split('-');
+  const months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+  return `${months[+m - 1]} ${+d}, ${y}`;
 }
 function formatDate(ds) {
   const [y,m,d] = ds.split('-');
@@ -1013,14 +1270,17 @@ function buildEmpGrid() {
       const div = document.createElement('div');
       div.className = 'emp-tile' + (selected.has(w._id) ? ' on' : '');
       div.dataset.id = w._id;
-      div.innerHTML = `<div class="tile-check">✓</div><div class="tile-name">${w.name}</div>`;
+      div.innerHTML = `<div class="tile-check">✓</div><div class="tile-name">${esc(w.name)}</div>`;
       div.onclick = () => toggleEmp(w._id, div);
       g.appendChild(div);
     });
+
+  updateSubmitButton();
 }
 function toggleEmp(id, el) {
   if (selected.has(id)) { selected.delete(id); el.classList.remove('on'); }
   else { selected.add(id); el.classList.add('on'); }
+  updateSubmitButton();
 }
 function selectAll() {
   workers
@@ -1031,26 +1291,220 @@ function selectAll() {
 }
 function selectNone() { selected.clear(); buildEmpGrid(); }
 
-async function submitAttendance() {
+// Says out loud how many people are about to be logged, so nobody has to count
+// highlighted tiles to check themselves.
+function updateSubmitButton() {
+  const btn = document.getElementById('submit-attendance-btn');
+  if (!btn) return;
+
+  const n = selected.size;
+  btn.innerHTML = n === 0
+    ? '<span>✓</span> Next: Check Hours &amp; Submit'
+    : `<span>✓</span> Next: Check Hours for ${n} ${n === 1 ? 'Person' : 'People'}`;
+}
+
+function workerName(id) {
+  const w = workers.find(x => x._id === id);
+  return w ? w.name : 'Unknown worker';
+}
+
+function money(n) {
+  return '$' + Number(n || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+// Names, job sites and comments are typed by hand and land in innerHTML. An
+// apostrophe in "Bob's Fence" or a stray < would otherwise mangle the page.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// The record already on file for whatever date + job site is currently typed in.
+function findExistingRecord() {
+  const date = document.getElementById('att-date').value || todayStr();
   const loc  = document.getElementById('att-location').value.trim();
-  const note = document.getElementById('att-note').value.trim();
-  if (!loc)            return toast('Please enter a job site / location.');
+  if (!loc) return null;
+  return records.find(r => r.date === date && r.location === loc) || null;
+}
+
+// Tells the user, before they submit, that this day already has people on it —
+// so "I'm adding Dave" never feels like it might be replacing the crew.
+function refreshExistingBanner() {
+  const banner = document.getElementById('existing-banner');
+  const existing = findExistingRecord();
+
+  if (!existing || !existing.workerIds.length) {
+    banner.classList.remove('show');
+    banner.innerHTML = '';
+    return;
+  }
+
+  const names = existing.workerIds.map(workerName).join(', ');
+  const count = existing.workerIds.length;
+
+  banner.innerHTML =
+    `<strong>${count} ${count === 1 ? 'person' : 'people'}</strong> already logged at ` +
+    `<strong>${esc(existing.location)}</strong> on ${formatDateLong(existing.date)}.` +
+    `<span class="eb-names">${names}</span>`;
+  banner.classList.add('show');
+}
+
+// ═══════════════════════════════════════
+// REVIEW DIALOG — half days & comments
+// ═══════════════════════════════════════
+// workerId -> { halfDay, note } for the crew currently being submitted.
+let reviewDetails = new Map();
+
+function openReview() {
+  const loc  = document.getElementById('att-location').value.trim();
+  const date = document.getElementById('att-date').value || todayStr();
+
+  if (!loc) return toast('Please enter a job site / location.');
   if (selected.size === 0) return toast('Please select at least one employee.');
 
-  const selectedDate = document.getElementById('att-date').value || todayStr();
-  
-  const exists = records.find(r => r.date === selectedDate && r.location === loc);
-  if (exists && !confirm('Attendance for this date at this location has already been submitted. Overwrite it?')) return;
+  if (date > todayStr()) {
+    return toast("You can't log work for a day that hasn't happened yet.");
+  }
+
+  // Carry over what's already saved for these workers, so reopening the day
+  // shows their existing half-day and comment instead of silently resetting.
+  const existing = findExistingRecord();
+  reviewDetails = new Map();
+
+  selected.forEach(id => {
+    const saved = existing && (existing.entries || []).find(e => String(e.workerId) === String(id));
+    reviewDetails.set(id, {
+      halfDay: saved ? Boolean(saved.halfDay) : false,
+      note: saved ? (saved.note || '') : ''
+    });
+  });
+
+  const dayName = DAY_NAMES[new Date(date + 'T12:00:00').getDay()];
+  document.getElementById('review-date').textContent =
+    `${dayName}, ${formatDateLong(date)}`;
+  document.getElementById('review-sub').textContent =
+    `${loc} · ${selected.size} ${selected.size === 1 ? 'person' : 'people'}`;
+
+  renderReviewRows();
+  document.getElementById('review-overlay').classList.add('show');
+}
+
+function closeReview() {
+  document.getElementById('review-overlay').classList.remove('show');
+}
+
+function renderReviewRows() {
+  const body = document.getElementById('review-body');
+
+  body.innerHTML = [...selected].map(id => {
+    const w = workers.find(x => x._id === id);
+    if (!w) return '';
+
+    const d = reviewDetails.get(id) || { halfDay: false, note: '' };
+    const pay = Number(w.wage || 0) * (d.halfDay ? 0.5 : 1);
+
+    return `
+      <div class="rw-row">
+        <div class="rw-top">
+          <div class="rw-name">${esc(w.name)}</div>
+          <div class="rw-pay">${money(pay)}</div>
+        </div>
+        <div class="daytype">
+          <button type="button" class="${d.halfDay ? '' : 'on'}"
+                  onclick="setDayType('${id}', false)">Full day — ${money(w.wage)}</button>
+          <button type="button" class="${d.halfDay ? 'on' : ''}"
+                  onclick="setDayType('${id}', true)">Half day — ${money(Number(w.wage || 0) / 2)}</button>
+        </div>
+        <input class="rw-note" type="text" placeholder="Comment for ${esc(w.name)} (optional)"
+               value="${esc(d.note)}"
+               oninput="setWorkerNote('${id}', this.value)">
+      </div>
+    `;
+  }).join('');
+
+  updateReviewTotal();
+}
+
+function setDayType(id, halfDay) {
+  const d = reviewDetails.get(id) || { halfDay: false, note: '' };
+  d.halfDay = halfDay;
+  reviewDetails.set(id, d);
+  renderReviewRows();
+}
+
+// Kept off renderReviewRows so typing doesn't rebuild the field and drop focus.
+function setWorkerNote(id, value) {
+  const d = reviewDetails.get(id) || { halfDay: false, note: '' };
+  d.note = value;
+  reviewDetails.set(id, d);
+}
+
+function updateReviewTotal() {
+  const total = [...selected].reduce((sum, id) => {
+    const w = workers.find(x => x._id === id);
+    if (!w) return sum;
+    const d = reviewDetails.get(id) || { halfDay: false };
+    return sum + Number(w.wage || 0) * (d.halfDay ? 0.5 : 1);
+  }, 0);
+
+  document.getElementById('review-total').textContent = money(total);
+}
+
+async function confirmSubmit() {
+  const btn  = document.getElementById('review-confirm');
+  const loc  = document.getElementById('att-location').value.trim();
+  const note = document.getElementById('att-note').value.trim();
+  const date = document.getElementById('att-date').value || todayStr();
+
+  // Re-checked here because the dialog can sit open across midnight.
+  if (date > todayStr()) {
+    closeReview();
+    return toast("You can't log work for a day that hasn't happened yet.");
+  }
+
+  const entries = [...selected].map(id => {
+    const d = reviewDetails.get(id) || { halfDay: false, note: '' };
+    return { workerId: id, halfDay: Boolean(d.halfDay), note: (d.note || '').trim() };
+  });
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
 
   try {
-    const saved = await POST('/api/records', { date: selectedDate, location: loc, note, workerIds: [...selected] });
-    records = records.filter(r => !(r.date === selectedDate && r.location === loc));
+    const saved = await POST('/api/records', {
+      date, location: loc, note, workerIds: [...selected], entries
+    });
+
+    records = records.filter(r => r._id !== saved._id);
     records.push(saved);
-    toast('✓ Attendance submitted for ' + selected.size + ' employee' + (selected.size > 1 ? 's' : '') + '!', true);
+
+    const halfCount = entries.filter(e => e.halfDay).length;
+    toast(
+      `✓ Saved ${selected.size} ${selected.size === 1 ? 'person' : 'people'} for ` +
+      `${formatDate(date)}${halfCount ? ` (${halfCount} half day${halfCount > 1 ? 's' : ''})` : ''}.`,
+      true
+    );
+
+    closeReview();
     document.getElementById('att-location').value = '';
     document.getElementById('att-note').value = '';
     selectNone();
-  } catch (e) { toast('Error: ' + e.message); }
+    refreshExistingBanner();
+    populateFilters();
+    renderView();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit';
+  }
 }
 
 // ═══════════════════════════════════════
@@ -1107,6 +1561,10 @@ async function submitHourlyEntry() {
   if (!location) return toast('Enter a job site or description.');
   if (!timeIn)   return toast('Enter time in.');
   if (!timeOut)  return toast('Enter time out.');
+
+  if (date > todayStr()) {
+    return toast("You can't log hours for a day that hasn't happened yet.");
+  }
 
   const worker = workers.find(w => w._id === workerId);
   const rate = Number(worker?.hourlyRate || 0);
@@ -1171,13 +1629,15 @@ async function deleteWorkerFromRecord(recordId, workerId) {
 
         return {
           ...r,
-          workerIds: r.workerIds.filter(id => id !== workerId)
+          workerIds: r.workerIds.filter(id => id !== workerId),
+          entries: (r.entries || []).filter(e => String(e.workerId) !== String(workerId))
         };
       })
       .filter(r => r.workerIds.length > 0);
 
     populateFilters();
     renderView();
+    refreshExistingBanner();
 
     toast('Worker removed from this date.');
   } catch (e) {
@@ -1270,14 +1730,21 @@ function renderView() {
   const cards = displayWorkers.map(w => {
     const dailyDays = filteredRecords
       .filter(r => r.workerIds.includes(w._id))
-      .map(r => ({
-        date: r.date,
-        type: 'daily',
-        location: r.location,
-        note: r.note,
-        amount: Number(w.wage || 0),
-        _id: r._id
-      }));
+      .map(r => {
+        // No entry means a record written before half-days existed: full day.
+        const entry = (r.entries || []).find(e => String(e.workerId) === String(w._id));
+        const halfDay = Boolean(entry && entry.halfDay);
+
+        return {
+          date: r.date,
+          type: 'daily',
+          location: r.location,
+          note: [r.note, entry && entry.note].map(t => (t || '').trim()).filter(Boolean).join(' · '),
+          amount: Number(w.wage || 0) * (halfDay ? 0.5 : 1),
+          halfDay,
+          _id: r._id
+        };
+      });
 
     const hourlyDays = filteredHourly
       .filter(e => e.workerId === w._id)
@@ -1309,19 +1776,19 @@ function renderView() {
     const daysHtml = days.map(d => {
       if (d.type === 'daily') {
   return `<div class="day-chip">
-    ${formatDate(d.date)}
-    <span class="loc">· ${d.location}${d.note ? ' · ' + d.note : ''} · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+    ${formatDate(d.date)}${d.halfDay ? '<span class="half-badge">Half day</span>' : ''}
+    <span class="loc">· ${esc(d.location)}${d.note ? ' · ' + esc(d.note) : ''} · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
     <span onclick="deleteWorkerFromRecord('${d._id}', '${w._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span>
   </div>`;
 }
 
-      return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? d.location + ' · ' : ''}${d.timeIn || ''}${d.timeOut ? '–' + d.timeOut : ''} · ${d.hours} hrs · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
+      return `<div class="day-chip" style="border-color:#6b8f6e;">${formatDate(d.date)}<span class="loc">· ${d.location ? esc(d.location) + ' · ' : ''}${d.timeIn || ''}${d.timeOut ? '–' + d.timeOut : ''} · ${d.hours} hrs · <strong>$${Number(d.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span> <span onclick="deleteHourlyEntry('${d._id}')" style="cursor:pointer;color:var(--red);font-size:12px;margin-left:4px;" title="Remove">✕</span></div>`;
     }).join('');
 
     return `
       <div class="worker-card">
         <div class="wc-header">
-          <div class="wc-name">${w.name}</div>
+          <div class="wc-name">${esc(w.name)}</div>
           <div class="wc-days-count">${days.length} entr${days.length !== 1 ? 'ies' : 'y'}</div>
           <div class="wc-wage">Total $${totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
           <button class="dl-btn" onclick="downloadXLSX('${w._id}', '${periodFilter}')">⬇ Download XLSX</button>
@@ -1393,7 +1860,7 @@ function renderWorkerList() {
   }
   ul.innerHTML = workers.map(w => `
     <div class="mw-row">
-      <div class="mw-name-static">${w.name}</div>
+      <div class="mw-name-static">${esc(w.name)}</div>
       <div class="mw-wage-static">$${w.wage}/day</div>
       <input type="number" placeholder="New wage" id="wage-${w._id}" style="max-width:130px;" min="0" step="0.01">
       <button class="btn-sm" onclick="updateWage('${w._id}')">Update</button>
@@ -1460,7 +1927,15 @@ document.addEventListener('keydown', e => {
   if (!currentUser) {
     if (e.key >= '0' && e.key <= '9') pinPress(e.key);
     if (e.key === 'Backspace') pinDel();
+    return;
   }
+
+  if (e.key === 'Escape') closeReview();
+});
+
+// Tapping the dark area around the dialog backs out, the way people expect.
+document.getElementById('review-overlay').addEventListener('click', e => {
+  if (e.target.id === 'review-overlay') closeReview();
 });
 </script>
 </body>

@@ -1,4 +1,4 @@
-const { connectDB, Worker, Record, Hourly } = require('./_db');
+const { connectDB, Worker, Record, Hourly, dailyAmountFor } = require('./_db');
 const ExcelJS = require('exceljs');
 
 function toYMD(date) {
@@ -127,15 +127,30 @@ module.exports = async (req, res) => {
 
     const entriesByDate = {};
 
-    // Daily entries: amount = worker daily wage
+    // Daily entries: full daily wage, or half of it for a half day.
     dailyRecords.forEach(record => {
       if (!entriesByDate[record.date]) entriesByDate[record.date] = [];
 
+      const entry = (record.entries || []).find(
+        e => String(e.workerId) === String(workerId)
+      );
+      const halfDay = Boolean(entry && entry.halfDay);
+
+      // The day note and this worker's own comment are both worth carrying into
+      // the timesheet the worker actually gets handed.
+      const note = [record.note, entry && entry.note]
+        .map(t => (t || '').trim())
+        .filter(Boolean)
+        .join(' — ');
+
       entriesByDate[record.date].push({
         type: 'daily',
-        location: record.location || '',
-        note: record.note || '',
-        amount: Number(worker.wage || 0)
+        // Marked on the line itself so a half-rate day is self-explanatory to
+        // anyone reading the printed sheet.
+        location: (record.location || '') + (halfDay ? ' (half day)' : ''),
+        note,
+        amount: dailyAmountFor(record, workerId, worker.wage),
+        halfDay
       });
     });
 

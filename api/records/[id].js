@@ -22,6 +22,12 @@ module.exports = async (req, res) => {
         id => id.toString() !== workerId.toString()
       );
 
+      // Drop their half-day/comment too, so re-adding them later starts clean
+      // instead of silently inheriting the old entry.
+      record.entries = (record.entries || []).filter(
+        e => String(e.workerId) !== String(workerId)
+      );
+
       // If no workers are left, delete the whole record
       if (record.workerIds.length === 0) {
         await Record.findByIdAndDelete(id);

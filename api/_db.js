@@ -45,8 +45,30 @@ const recordSchema = new mongoose.Schema({
   date:      { type: String, required: true },
   location:  { type: String, required: true, trim: true },
   note:      { type: String, default: '', trim: true },
+
+  // workerIds stays the canonical list of who worked this day/site. Everything
+  // that asks "did this worker work?" still reads it, so records written before
+  // half-days existed keep working untouched.
   workerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Worker' }],
+
+  // Per-worker detail, parallel to workerIds. A worker with no entry here is a
+  // full day with no comment — exactly what the older records already meant.
+  entries: [{
+    _id: false,
+    workerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', required: true },
+    halfDay:  { type: Boolean, default: false },
+    note:     { type: String, default: '', trim: true }
+  }],
 }, { timestamps: true });
+
+// One place decides what a worker earned on a daily record, so the on-screen
+// total and the exported timesheet cannot drift apart.
+function dailyAmountFor(record, workerId, wage) {
+  const entry = (record.entries || []).find(
+    e => String(e.workerId) === String(workerId)
+  );
+  return Number(wage || 0) * (entry && entry.halfDay ? 0.5 : 1);
+}
 
 const hourlySchema = new mongoose.Schema({
   workerId: { type: String, required: true },
@@ -64,4 +86,4 @@ const Worker = mongoose.models.Worker || mongoose.model('Worker', workerSchema);
 const Record = mongoose.models.Record || mongoose.model('Record', recordSchema);
 const Hourly = mongoose.models.Hourly || mongoose.model('Hourly', hourlySchema);
 
-module.exports = { connectDB, Worker, Record, Hourly };
+module.exports = { connectDB, Worker, Record, Hourly, dailyAmountFor };

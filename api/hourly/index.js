@@ -1,4 +1,5 @@
 const { connectDB, Hourly } = require('../_db');
+const { isFutureDate, todayStr } = require('../_date');
 
 module.exports = async (req, res) => {
   try {
@@ -25,6 +26,12 @@ module.exports = async (req, res) => {
       if (!workerId || !date || !hours || !rate) {
         return res.status(400).json({
           error: 'workerId, date, hours, and rate are required'
+        });
+      }
+
+      if (isFutureDate(date)) {
+        return res.status(400).json({
+          error: `You can't log hours for ${date} because that day hasn't happened yet. Today is ${todayStr()}.`
         });
       }
 
