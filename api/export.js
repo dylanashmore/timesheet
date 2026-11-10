@@ -149,7 +149,7 @@ module.exports = async (req, res) => {
         // anyone reading the printed sheet.
         location: (record.location || '') + (halfDay ? ' (half day)' : ''),
         note,
-        amount: dailyAmountFor(record, workerId, worker.wage),
+        amount: dailyAmountFor(record, workerId, worker.wage, worker.name),
         halfDay
       });
     });
