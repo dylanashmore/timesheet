@@ -1399,6 +1399,13 @@ function openReview() {
 function closeReview() {
   document.getElementById('review-overlay').classList.remove('show');
 }
+function workerDayPay(w, halfDay) {
+  if (halfDay && w.name.trim().toLowerCase() === 'divad ramos') {
+    return 100;
+  }
+
+  return Number(w.wage || 0) * (halfDay ? 0.5 : 1);
+}
 
 function renderReviewRows() {
   const body = document.getElementById('review-body');
@@ -1408,7 +1415,7 @@ function renderReviewRows() {
     if (!w) return '';
 
     const d = reviewDetails.get(id) || { halfDay: false, note: '' };
-    const pay = Number(w.wage || 0) * (d.halfDay ? 0.5 : 1);
+    const pay = workerDayPay(w, d.halfDay);
 
     return `
       <div class="rw-row">
@@ -1420,8 +1427,7 @@ function renderReviewRows() {
           <button type="button" class="${d.halfDay ? '' : 'on'}"
                   onclick="setDayType('${id}', false)">Full day — ${money(w.wage)}</button>
           <button type="button" class="${d.halfDay ? 'on' : ''}"
-                  onclick="setDayType('${id}', true)">Half day — ${money(Number(w.wage || 0) / 2)}</button>
-        </div>
+                  onclick="setDayType('${id}', true)">Half day — ${money(Number(w.wage || 0) / 2)}${money(workerDayPay(w, true))}
         <input class="rw-note" type="text" placeholder="Comment for ${esc(w.name)} (optional)"
                value="${esc(d.note)}"
                oninput="setWorkerNote('${id}', this.value)">
@@ -1451,7 +1457,7 @@ function updateReviewTotal() {
     const w = workers.find(x => x._id === id);
     if (!w) return sum;
     const d = reviewDetails.get(id) || { halfDay: false };
-    return sum + Number(w.wage || 0) * (d.halfDay ? 0.5 : 1);
+    return sum + workerDayPay(w, d.halfDay);
   }, 0);
 
   document.getElementById('review-total').textContent = money(total);
@@ -1740,7 +1746,7 @@ function renderView() {
           type: 'daily',
           location: r.location,
           note: [r.note, entry && entry.note].map(t => (t || '').trim()).filter(Boolean).join(' · '),
-          amount: Number(w.wage || 0) * (halfDay ? 0.5 : 1),
+          amount: workerDayPay(w, halfDay),
           halfDay,
           _id: r._id
         };
