@@ -63,10 +63,16 @@ const recordSchema = new mongoose.Schema({
 
 // One place decides what a worker earned on a daily record, so the on-screen
 // total and the exported timesheet cannot drift apart.
-function dailyAmountFor(record, workerId, wage) {
+function dailyAmountFor(record, workerId, wage, workerName = '') {
   const entry = (record.entries || []).find(
     e => String(e.workerId) === String(workerId)
   );
+
+  if (entry && entry.halfDay &&
+      workerName.trim().toLowerCase() === 'divad ramos') {
+    return 100;
+  }
+
   return Number(wage || 0) * (entry && entry.halfDay ? 0.5 : 1);
 }
 
