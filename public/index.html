@@ -1427,7 +1427,8 @@ function renderReviewRows() {
           <button type="button" class="${d.halfDay ? '' : 'on'}"
                   onclick="setDayType('${id}', false)">Full day — ${money(w.wage)}</button>
           <button type="button" class="${d.halfDay ? 'on' : ''}"
-                  onclick="setDayType('${id}', true)">Half day — ${money(Number(w.wage || 0) / 2)}${money(workerDayPay(w, true))}
+                  onclick="setDayType('${id}', true)">Half day — ${money(workerDayPay(w, true))}</button>
+        </div>
         <input class="rw-note" type="text" placeholder="Comment for ${esc(w.name)} (optional)"
                value="${esc(d.note)}"
                oninput="setWorkerNote('${id}', this.value)">
